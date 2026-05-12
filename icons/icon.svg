@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background rounded square -->
+  <rect width="512" height="512" rx="104" fill="#2d5a1b"/>
+  <!-- Leaf body -->
+  <path d="M256 76
+    C310 76 390 130 390 220
+    C390 310 330 400 256 420
+    C182 400 122 310 122 220
+    C122 130 202 76 256 76 Z"
+    fill="#5a9e3a"/>
+  <!-- Leaf highlight -->
+  <path d="M256 90
+    C300 90 370 138 370 220
+    C370 280 330 350 290 385
+    C340 340 360 275 360 220
+    C360 145 310 105 256 98 Z"
+    fill="#6dbe46" opacity="0.4"/>
+  <!-- Central vein -->
+  <line x1="256" y1="420" x2="256" y2="160"
+    stroke="#1a3a0f" stroke-width="14" stroke-linecap="round"/>
+  <!-- Side veins -->
+  <path d="M256 300 Q305 265 355 258" stroke="#1a3a0f" stroke-width="9" stroke-linecap="round" fill="none"/>
+  <path d="M256 345 Q208 310 158 303" stroke="#1a3a0f" stroke-width="9" stroke-linecap="round" fill="none"/>
+  <path d="M256 248 Q295 218 338 213" stroke="#1a3a0f" stroke-width="7" stroke-linecap="round" fill="none"/>
+  <path d="M256 280 Q218 250 176 245" stroke="#1a3a0f" stroke-width="7" stroke-linecap="round" fill="none"/>
+  <!-- GPS dot / pin -->
+  <circle cx="370" cy="148" r="32" fill="#fff" opacity="0.92"/>
+  <circle cx="370" cy="140" r="16" fill="#2d5a1b"/>
+  <path d="M370 156 L356 176 L384 176 Z" fill="#2d5a1b"/>
+</svg>

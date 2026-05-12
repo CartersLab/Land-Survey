@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#2d5a1b">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Field Survey">
+  <title>Field Survey</title>
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.locatecontrol@0.79.0/dist/L.Control.Locate.min.css">
+
+  <!-- App styles -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app"></div>
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- ── CDN Libraries (order matters) ──────────────────────────────────── -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="https://unpkg.com/leaflet.locatecontrol@0.79.0/dist/L.Control.Locate.min.js"></script>
+  <script src="https://unpkg.com/leaflet-offline@2.2.0/dist/bundle.js"></script>
+  <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+  <script src="https://unpkg.com/fuse.js@7.0.0/dist/fuse.min.js"></script>
+  <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+
+  <!-- ── App Data — must load before app code ───────────────────────────── -->
+  <!-- If this file is missing, run: node scripts/fetch-inaturalist-species.js -->
+  <script src="data/michigan-species.js"></script>
+
+  <!-- ── Core (each depends on the previous) ────────────────────────────── -->
+  <script src="config.js"></script>
+  <script src="core/db.js"></script>
+  <script src="core/utils.js"></script>
+  <script src="core/state.js"></script>
+  <script src="core/router.js"></script>
+
+  <!-- ── Modules ────────────────────────────────────────────────────────── -->
+  <script src="modules/ui.js"></script>
+  <script src="modules/species.js"></script>
+  <script src="modules/tiles.js"></script>
+  <script src="modules/markers.js"></script>
+  <script src="modules/clusters.js"></script>
+
+  <!-- ── Screens ────────────────────────────────────────────────────────── -->
+  <script src="screens/home.js"></script>
+  <script src="screens/map.js"></script>
+  <script src="screens/form.js"></script>
+  <script src="screens/export.js"></script>
+  <script src="screens/survey-settings.js"></script>
+  <script src="screens/app-settings.js"></script>
+
+  <!-- ── Exporters ──────────────────────────────────────────────────────── -->
+  <script src="exporters/inat.js"></script>
+  <script src="exporters/dwc.js"></script>
+  <script src="exporters/mnfi.js"></script>
+  <script src="exporters/geojson.js"></script>
+  <script src="exporters/checklist.js"></script>
+  <script src="exporters/html-export.js"></script>
+
+  <!-- ── App Bootstrap ──────────────────────────────────────────────────── -->
+  <script>
+    // Register service worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').then(reg => {
+        reg.addEventListener('updatefound', () => {
+          const worker = reg.installing;
+          worker.addEventListener('statechange', () => {
+            if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+              UI.swUpdateToast();
+            }
+          });
+        });
+      }).catch(err => console.warn('SW registration failed:', err));
+    }
+
+    async function boot() {
+      try {
+        await DB.open();
+        await State.loadDismissedClusterKeys();
+
+        // Attempt to resolve any offline species picks when online
+        if (navigator.onLine) {
+          Species.resolveOfflineKeys().catch(() => {});
+        }
+        State.subscribe('isOnline', online => {
+          if (online) Species.resolveOfflineKeys().catch(() => {});
+        });
+
+        // Register screens
+        Router.register('home',            HomeScreen.render,          HomeScreen.destroy);
+        Router.register('map',             MapScreen.render,           MapScreen.destroy);
+        Router.register('form',            FormScreen.render,          FormScreen.destroy);
+        Router.register('export',          ExportScreen.render,        ExportScreen.destroy);
+        Router.register('survey-settings', SurveySettingsScreen.render, SurveySettingsScreen.destroy);
+        Router.register('app-settings',    AppSettingsScreen.render,   AppSettingsScreen.destroy);
+
+        Router.init();
+      } catch (err) {
+        document.getElementById('app').innerHTML = `
+          <div style="padding:2rem;max-width:480px;margin:auto">
+            <h2 style="color:#c0392b;margin-bottom:12px">Failed to start</h2>
+            <p style="color:#555;margin-bottom:16px">${escapeHtml(err.message)}</p>
+            <button class="btn btn-primary" onclick="location.reload()">Retry</button>
+          </div>`;
+      }
+    }
+
+    // Tiny shim so boot() can call escapeHtml before utils.js is guaranteed
+    // to have run (it always has by this point in script order, but be safe).
+    if (typeof escapeHtml === 'undefined') {
+      window.escapeHtml = s => String(s ?? '')
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    boot();
+  </script>
+</body>
+</html>

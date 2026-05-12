@@ -1,0 +1,59 @@
+const CONFIG = {
+  MAP: {
+    DEFAULT_CENTER: [42.82, -83.78],
+    DEFAULT_ZOOM: 15,
+    MIN_ZOOM: 10,
+    MAX_ZOOM: 19,
+    CACHE_MIN_ZOOM: 14,
+    CACHE_MAX_ZOOM: 18,
+    CLUSTER_RADIUS_METERS: 20,
+    CLUSTER_MIN_COUNT: 3,
+    CLUSTER_NEARBY_MULTIPLIER: 1.5,
+  },
+  TILE_PROVIDERS: {
+    osm: {
+      name: 'OpenStreetMap',
+      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19,
+    },
+    stadia: {
+      name: 'Terrain (No Labels)',
+      url: 'https://tiles.stadiamaps.com/tiles/stamen_terrain_background/{z}/{x}/{y}.png',
+      attribution: '© Stadia Maps © Stamen Design © OpenStreetMap contributors',
+      maxZoom: 18,
+    },
+    maptiler: {
+      name: 'Satellite (No Labels)',
+      url: 'https://api.maptiler.com/maps/hybrid/{z}/{x}/{y}.jpg?key={key}',
+      key: 'YOUR_MAPTILER_KEY_HERE',
+      attribution: '© MapTiler © OpenStreetMap contributors',
+      maxZoom: 19,
+    },
+  },
+  GBIF: {
+    SUGGEST_URL: 'https://api.gbif.org/v1/species/suggest',
+    MATCH_URL: 'https://api.gbif.org/v1/species/match',
+    LOOKUP_URL: 'https://api.gbif.org/v1/species',
+    MAX_SUGGEST_RESULTS: 8,
+    CACHE_MAX_AGE_DAYS: 90,
+  },
+  EXPORT: {
+    INAT_COMBINE_THRESHOLD_DEFAULT: 5,
+    JITTER_LOW_METERS: 50,
+    JITTER_MEDIUM_METERS: 150,
+    JITTER_HIGH_METERS: 400,
+    HTML_TILE_BUFFER_TILES: 2,
+  },
+  DB: {
+    NAME: 'FieldSurveyDB',
+    VERSION: 1,
+    STORES: ['surveys', 'observations', 'stands', 'speciesCache', 'tileRegions', 'exportSettings'],
+  },
+  APP: {
+    VERSION: '1.0.0',
+    DEFAULT_SURVEYOR: '',
+    DEFAULT_COUNTY: 'Livingston',
+    DEFAULT_TOWNSHIP: 'Tyrone',
+  },
+};
