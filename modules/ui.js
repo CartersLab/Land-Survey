@@ -388,8 +388,8 @@ const UI = (() => {
                 startDate:    document.getElementById('ns-date')?.value || today,
                 notes:        document.getElementById('ns-notes')?.value?.trim() || '',
               };
+              resolve(data); // resolve BEFORE close() so onClose's resolve(null) is ignored
               close();
-              resolve(data);
             },
           },
         ],
