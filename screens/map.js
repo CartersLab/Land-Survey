@@ -36,15 +36,26 @@ const MapScreen = (() => {
         <div class="gps-accuracy-bar" id="gps-bar" style="display:none"></div>
       </div>`;
 
-    _initMap();
-    _buildLayerPanel();
-    _bindEvents();
-    _loadMarkers();
+    try {
+      _initMap();
+      _buildLayerPanel();
+      _bindEvents();
+      _loadMarkers();
 
-    window._refreshMapMarkers = () => _loadMarkers();
-    window._editObs    = _handleEditObs;
-    window._deleteObs  = _handleDeleteObs;
-    window._editStand  = _handleEditStand;
+      window._refreshMapMarkers = () => _loadMarkers();
+      window._editObs    = _handleEditObs;
+      window._deleteObs  = _handleDeleteObs;
+      window._editStand  = _handleEditStand;
+    } catch (err) {
+      console.error('[MapScreen] init failed:', err);
+      container.innerHTML = `
+        <div style="padding:2rem;text-align:center;max-width:420px;margin:auto">
+          <h3 style="color:#c0392b;margin-bottom:12px">Map failed to load</h3>
+          <p style="color:#555;margin-bottom:8px;font-size:.9rem">${escapeHtml(err.message)}</p>
+          <p style="color:#888;margin-bottom:20px;font-size:.8rem">Check browser console for details.</p>
+          <button class="btn btn-primary" onclick="Router.navigate('home')">← Back to Home</button>
+        </div>`;
+    }
   }
 
   // ── Map init ──────────────────────────────────────────────────────────────
@@ -64,24 +75,33 @@ const MapScreen = (() => {
 
     _standLayer = L.layerGroup().addTo(_map);
 
-    _markerLayer = L.markerClusterGroup({
-      maxClusterRadius:       40,
-      disableClusteringAtZoom: 17,
-      showCoverageOnHover:    false,
-      iconCreateFunction: cluster => L.divIcon({
-        html: `<div style="background:var(--green-primary);color:#fff;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.82rem;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">${cluster.getChildCount()}</div>`,
-        className: '', iconSize: [34, 34], iconAnchor: [17, 17],
-      }),
-    });
+    if (typeof L.markerClusterGroup === 'function') {
+      _markerLayer = L.markerClusterGroup({
+        maxClusterRadius:       40,
+        disableClusteringAtZoom: 17,
+        showCoverageOnHover:    false,
+        iconCreateFunction: cluster => L.divIcon({
+          html: `<div style="background:var(--green-primary);color:#fff;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.82rem;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">${cluster.getChildCount()}</div>`,
+          className: '', iconSize: [34, 34], iconAnchor: [17, 17],
+        }),
+      });
+    } else {
+      _markerLayer = L.layerGroup();
+    }
     _map.addLayer(_markerLayer);
 
-    // Locate control (GPS button)
-    L.control.locate({
-      position:  'bottomright',
-      flyTo:      true,
-      strings:  { title: 'My location' },
-      locateOptions: { enableHighAccuracy: true, maxAge: 5000, timeout: 12000 },
-    }).addTo(_map);
+    // Locate control (GPS button) — plugin may not be loaded
+    if (typeof L.control.locate === 'function') {
+      L.control.locate({
+        position:  'bottomright',
+        flyTo:      true,
+        strings:  { title: 'My location' },
+        locateOptions: { enableHighAccuracy: true, maxAge: 5000, timeout: 12000 },
+      }).addTo(_map);
+    }
+
+    // Ensure Leaflet reads the correct map container dimensions
+    setTimeout(() => { if (_map) _map.invalidateSize(); }, 150);
 
     // Persist map state
     _map.on('moveend', () => {

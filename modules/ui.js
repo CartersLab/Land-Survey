@@ -380,14 +380,16 @@ const UI = (() => {
                 document.getElementById('ns-name')?.focus();
                 return;
               }
-              close();
-              resolve({
+              // Capture all values before close() removes the modal from DOM
+              const data = {
                 name,
                 siteName:     document.getElementById('ns-site')?.value?.trim() || '',
                 surveyorName: document.getElementById('ns-surveyor')?.value?.trim() || '',
                 startDate:    document.getElementById('ns-date')?.value || today,
                 notes:        document.getElementById('ns-notes')?.value?.trim() || '',
-              });
+              };
+              close();
+              resolve(data);
             },
           },
         ],
