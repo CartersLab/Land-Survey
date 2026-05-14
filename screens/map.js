@@ -18,6 +18,11 @@ const MapScreen = (() => {
   // Cluster label state
   let _labelStands = [];
 
+  // Move-observation mode state
+  let _movingObsId   = null;
+  let _moveModeGhost = null;
+  let _moveModeToast = null;
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   async function render(container, params) {
@@ -59,6 +64,7 @@ const MapScreen = (() => {
       window._refreshMapMarkers = () => _loadMarkers();
       window._editObs       = _handleEditObs;
       window._deleteObs     = _handleDeleteObs;
+      window._moveObs       = _handleMoveObs;
       window._editCluster   = _handleEditCluster;
       window._deleteCluster = _handleDeleteCluster;
 
@@ -837,6 +843,70 @@ const MapScreen = (() => {
 
   // ── Popup action handlers ─────────────────────────────────────────────────
 
+  async function _handleMoveObs(obsId) {
+    const obs = await DB.get('observations', obsId).catch(() => null);
+    if (!obs || !obs.lat || !obs.lng) return;
+    _map.closePopup();
+
+    _movingObsId = obsId;
+
+    // Ghost marker that tracks the cursor / shows current position on touch
+    _moveModeGhost = L.circleMarker([obs.lat, obs.lng], {
+      radius: 11, fillColor: '#f39c12', color: '#e67e22',
+      weight: 3, fillOpacity: 0.85, opacity: 1, interactive: false,
+    }).addTo(_map);
+
+    _map.getContainer().style.cursor = 'crosshair';
+    _map.on('mousemove', _onMoveMousemove);
+    _map.on('click',     _onMovePlace);
+
+    _moveModeToast = UI.toast('Tap map to place observation', 'info', [
+      { label: 'Cancel', action: _cancelMove, style: 'btn-secondary' },
+    ], 0);
+  }
+
+  function _onMoveMousemove(e) {
+    _moveModeGhost?.setLatLng(e.latlng);
+  }
+
+  async function _onMovePlace(e) {
+    const obsId = _movingObsId;
+    _exitMoveMode();
+    if (!obsId) return;
+    try {
+      const obs = await DB.get('observations', obsId);
+      if (!obs) return;
+      const standId = obs.standId;
+      obs.lat        = e.latlng.lat;
+      obs.lng        = e.latlng.lng;
+      obs.updatedAt  = now();
+      await DB.put('observations', obs);
+      if (standId) {
+        await Clusters.refreshStand(_surveyId, standId);
+      } else {
+        _loadMarkers();
+      }
+      UI.toastSuccess('Observation moved');
+    } catch (err) {
+      console.error('[MapScreen] moveObs:', err);
+      UI.toastError('Failed to move observation');
+      _loadMarkers();
+    }
+  }
+
+  function _cancelMove() {
+    _exitMoveMode();
+  }
+
+  function _exitMoveMode() {
+    _map?.off('mousemove', _onMoveMousemove);
+    _map?.off('click',     _onMovePlace);
+    if (_moveModeGhost) { _moveModeGhost.remove(); _moveModeGhost = null; }
+    if (_moveModeToast) { _moveModeToast.dismiss(); _moveModeToast = null; }
+    if (_map) _map.getContainer().style.cursor = '';
+    _movingObsId = null;
+  }
+
   async function _handleEditObs(obsId) {
     const obs = await DB.get('observations', obsId).catch(() => null);
     if (!obs) return;
@@ -941,8 +1011,10 @@ const MapScreen = (() => {
     window._refreshMapMarkers = null;
     window._editObs           = null;
     window._deleteObs         = null;
+    window._moveObs           = null;
     window._editCluster       = null;
     window._deleteCluster     = null;
+    _exitMoveMode();
     _labelStands  = [];
     if (_map) { _map.remove(); _map = null; }
     _markerLayer  = null;

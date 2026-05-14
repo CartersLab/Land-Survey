@@ -116,6 +116,7 @@ const Markers = (() => {
       ${coordStr ? `<div class="popup-detail" style="font-size:.72rem;color:var(--text-muted);font-family:var(--font-mono)">${coordStr}</div>` : ''}
       <div class="popup-actions">
         <button class="btn btn-sm btn-secondary" onclick="window._editObs('${obs.id}')">Edit</button>
+        <button class="btn btn-sm btn-secondary" onclick="window._moveObs('${obs.id}')">Move</button>
         <button class="btn btn-sm btn-danger" onclick="window._deleteObs('${obs.id}')">Delete</button>
       </div>`;
   }
