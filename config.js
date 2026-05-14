@@ -11,6 +11,13 @@ const CONFIG = {
     CLUSTER_NEARBY_MULTIPLIER: 1.5,
   },
   TILE_PROVIDERS: {
+    esriImagery: {
+      name: 'Satellite (No Labels)',
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics',
+      maxZoom: 19,
+      subdomains: '',
+    },
     cartoVoyager: {
       name: 'Roads (No Labels)',
       url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
@@ -61,7 +68,7 @@ const CONFIG = {
   },
   APP: {
     VERSION: '1.1.0',
-    BUILD:   '2026-05-14 09:47',
+    BUILD:   '2026-05-14 09:51',
     DEFAULT_SURVEYOR: '',
     DEFAULT_COUNTY: 'Livingston',
     DEFAULT_TOWNSHIP: 'Tyrone',
