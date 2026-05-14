@@ -164,27 +164,12 @@ const ExportScreen = (() => {
           <div class="settings-row" style="padding:8px 0;border-bottom:1px solid var(--border)">
             <div class="settings-row-label">
               <h4 style="margin:0;font-size:.9rem">Obscure Location</h4>
-              <p style="margin:2px 0 0;font-size:.78rem;color:var(--text-muted)">Jitter coordinates to protect privacy</p>
+              <p style="margin:2px 0 0;font-size:.78rem;color:var(--text-muted)">No-label tiles, only loads map where observations exist</p>
             </div>
             <label class="toggle-switch">
               <input type="checkbox" id="rpt-obscure" ${S.obscureLocation ? 'checked' : ''}>
               <span class="toggle-track"></span>
             </label>
-          </div>
-
-          <div id="rpt-obscure-rows" style="${S.obscureLocation ? '' : 'display:none'}">
-            <div class="settings-row" style="padding:8px 0;border-bottom:1px solid var(--border)">
-              <div class="settings-row-label"><h4 style="margin:0;font-size:.9rem">Obscure Level</h4></div>
-              <select id="rpt-obscure-level" style="font-size:.85rem">
-                <option value="low"   ${(S.obscureLevel||'medium')==='low'   ?'selected':''}>Low (±100m)</option>
-                <option value="medium"${(S.obscureLevel||'medium')==='medium'?'selected':''}>Medium (±500m)</option>
-                <option value="high"  ${(S.obscureLevel||'medium')==='high'  ?'selected':''}>High (±2km)</option>
-              </select>
-            </div>
-            <div class="settings-row" style="padding:8px 0;border-bottom:1px solid var(--border)">
-              <div class="settings-row-label"><h4 style="margin:0;font-size:.9rem">Obscure Base Layer</h4></div>
-              <select id="rpt-obscure-layer" style="font-size:.85rem">${obscureLayerOpts}</select>
-            </div>
           </div>
 
           <div class="settings-row" style="padding:8px 0;border-bottom:1px solid var(--border)">
@@ -275,24 +260,13 @@ const ExportScreen = (() => {
     if (tab === 'checklist') bind('checklist-zip-btn', () => _doExport(() => ChecklistExporter.generate(_surveyId), 'species-checklist.zip',       'application/zip'));
 
     if (tab === 'report') {
-      document.getElementById('rpt-obscure')?.addEventListener('change', e => {
-        const rows = document.getElementById('rpt-obscure-rows');
-        if (rows) rows.style.display = e.target.checked ? 'block' : 'none';
-      });
       bind('report-btn', async () => {
         const settings = {
-          obscureLocation:          document.getElementById('rpt-obscure')?.checked ?? false,
-          obscureLevel:             document.getElementById('rpt-obscure-level')?.value || 'medium',
-          baseLayer:                document.getElementById('rpt-base-layer')?.value   || 'osm',
-          obscureBaseLayer:         document.getElementById('rpt-obscure-layer')?.value || 'stadia',
-          showDownloadButtons:      document.getElementById('rpt-show-dl')?.checked ?? true,
-          showInventoryTable:       document.getElementById('rpt-show-inv')?.checked ?? true,
+          obscureLocation:            document.getElementById('rpt-obscure')?.checked ?? false,
+          baseLayer:                  document.getElementById('rpt-base-layer')?.value || 'osm',
+          showDownloadButtons:        document.getElementById('rpt-show-dl')?.checked ?? true,
+          showInventoryTable:         document.getElementById('rpt-show-inv')?.checked ?? true,
           stripCoordinatesFromPopups: document.getElementById('rpt-obscure')?.checked ?? false,
-          jitterCoordinates:        true,
-          hideScaleBar:             false,
-          stripPhotos:              false,
-          showSummaryHeader:        true,
-          showSpeciesSidebar:       true,
         };
         await DB.putRaw('exportSettings', _surveyId, { htmlExport: settings }).catch(() => {});
         _doExport(() => HtmlExporter.generate(_surveyId), 'field-report.html', 'text/html');

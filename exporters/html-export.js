@@ -31,59 +31,40 @@ const HtmlExporter = (() => {
     ]);
 
     const S = exportSettingsRaw?.htmlExport || {};
-    const obscure         = S.obscureLocation    ?? false;
-    const obscureLevel    = S.obscureLevel        || 'medium';
-    const baseLayer       = obscure ? (S.obscureBaseLayer || 'cartoVoyager') : (S.baseLayer || 'osm');
-    const stripCoords     = obscure && (S.stripCoordinatesFromPopups ?? true);
-    const hideScale       = obscure && (S.hideScaleBar ?? false);
-    const stripPhotos     = obscure && obscureLevel === 'high' && (S.stripPhotos ?? false);
-    const showDl          = S.showDownloadButtons ?? true;
+    const obscure     = S.obscureLocation ?? false;
+    const baseLayer   = obscure ? 'cartoVoyager' : (S.baseLayer || 'osm');
+    const stripCoords = obscure && (S.stripCoordinatesFromPopups ?? true);
+    const showDl      = S.showDownloadButtons ?? true;
+    const tp          = CONFIG.TILE_PROVIDERS[baseLayer] || CONFIG.TILE_PROVIDERS.osm;
 
-    const obscureMaxM = obscure
-      ? (obscureLevel === 'low' ? CONFIG.EXPORT.JITTER_LOW_METERS
-       : obscureLevel === 'high' ? CONFIG.EXPORT.JITTER_HIGH_METERS
-       : CONFIG.EXPORT.JITTER_MEDIUM_METERS)
-      : 0;
-
-    const exportSeed = Date.now();
-    const tp = CONFIG.TILE_PROVIDERS[baseLayer] || CONFIG.TILE_PROVIDERS.osm;
-
-    // Prepare observation data (jitter if needed, normalise field names)
-    const obsData = obs.map(o => {
-      let lat = o.lat ?? o.latitude;
-      let lng = o.lng ?? o.longitude;
-      if (obscure && lat && lng) [lat, lng] = jitterCoordinate(lat, lng, obscureMaxM, o.id + exportSeed);
-      return {
-        id:             o.id,
-        lat, lng,
-        category:       o.category || '',
-        commonName:     o.commonName || '',
-        scientificName: o.scientificName || '',
-        gbifKey:        o.gbifKey || null,
-        lifeStage:      o.lifeStage || '',
-        condition:      o.condition || '',
-        count:          o.count || o.individualCount || o.abundance || 1,
-        dbhCm:          o.dbhCm || null,
-        heightM:        o.heightM || o.heightEstimateM || null,
-        coveragePct:    o.coveragePct ?? o.coverEstimate ?? null,
-        behavior:       o.behavior || '',
-        signType:       o.signType || '',
-        notes:          o.notes || '',
-        isRare:         o.isRare || false,
-        observedAt:     o.observedAt || o.timestamp || o.createdAt || '',
-        photoFilenames: (!stripPhotos && o.photoFilenames) ? o.photoFilenames : [],
-        clusterId:      o.clusterId || null,
-      };
-    });
+    const obsData = obs.map(o => ({
+      id:             o.id,
+      lat:            o.lat ?? o.latitude,
+      lng:            o.lng ?? o.longitude,
+      category:       o.category || '',
+      commonName:     o.commonName || '',
+      scientificName: o.scientificName || '',
+      gbifKey:        o.gbifKey || null,
+      lifeStage:      o.lifeStage || '',
+      condition:      o.condition || '',
+      count:          o.count || o.individualCount || o.abundance || 1,
+      dbhCm:          o.dbhCm || null,
+      heightM:        o.heightM || o.heightEstimateM || null,
+      coveragePct:    o.coveragePct ?? o.coverEstimate ?? null,
+      behavior:       o.behavior || '',
+      signType:       o.signType || '',
+      notes:          o.notes || '',
+      isRare:         o.isRare || false,
+      observedAt:     o.observedAt || o.timestamp || o.createdAt || '',
+      photoFilenames: o.photoFilenames || [],
+      clusterId:      o.clusterId || null,
+    }));
 
     // Prepare stand data
     const standData = stands.map(s => {
-      let polygon = (s.polygon || s.hullCoordinates || []).map(p =>
+      const polygon = (s.polygon || s.hullCoordinates || []).map(p =>
         Array.isArray(p) ? [p[0], p[1]] : [p.lat, p.lng]
       );
-      if (obscure && polygon.length) {
-        polygon = polygon.map(([lat, lng]) => jitterCoordinate(lat, lng, obscureMaxM, s.id + exportSeed));
-      }
       return {
         id:                  s.id,
         polygon,
@@ -118,7 +99,7 @@ const HtmlExporter = (() => {
       },
       observations: obsData,
       stands:       standData,
-      meta: { stripCoords, hideScale, showDl, exportDate, obscure },
+      meta: { stripCoords, showDl, exportDate, obscure },
       tileUrl:        tp.url,
       tileAttr:       tp.attribution,
       tileSubdomains: tp.subdomains || 'abc',
@@ -261,7 +242,7 @@ const DATA = ${dataJson.replace(/<\/script>/gi, '<\\/script>')};
   if(mapOk){
     try{
       map = L.map('map',{ center: D.center, zoom: 15, zoomControl: true, attributionControl: true });
-      if(!meta.hideScale) L.control.scale({imperial:true,metric:true}).addTo(map);
+      L.control.scale({imperial:true,metric:true}).addTo(map);
       if(meta.obscure){
         var _BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
         var _tileSets = {};
