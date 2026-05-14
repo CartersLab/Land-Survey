@@ -164,7 +164,7 @@ const ExportScreen = (() => {
           <div class="settings-row" style="padding:8px 0;border-bottom:1px solid var(--border)">
             <div class="settings-row-label">
               <h4 style="margin:0;font-size:.9rem">Obscure Location</h4>
-              <p style="margin:2px 0 0;font-size:.78rem;color:var(--text-muted)">No-label tiles, only loads map where observations exist</p>
+              <p style="margin:2px 0 0;font-size:.78rem;color:var(--text-muted)">Terrain tiles (no labels), only loads tiles near observations</p>
             </div>
             <label class="toggle-switch">
               <input type="checkbox" id="rpt-obscure" ${S.obscureLocation ? 'checked' : ''}>
@@ -173,8 +173,11 @@ const ExportScreen = (() => {
           </div>
 
           <div class="settings-row" style="padding:8px 0;border-bottom:1px solid var(--border)">
-            <div class="settings-row-label"><h4 style="margin:0;font-size:.9rem">Base Map Layer</h4></div>
-            <select id="rpt-base-layer" style="font-size:.85rem">${tileProviderOpts}</select>
+            <div class="settings-row-label">
+              <h4 style="margin:0;font-size:.9rem;${S.obscureLocation ? 'opacity:.4' : ''}">Base Map Layer</h4>
+              <p style="margin:2px 0 0;font-size:.78rem;color:var(--text-muted);${S.obscureLocation ? 'opacity:.4' : ''}">Overridden by obscure mode</p>
+            </div>
+            <select id="rpt-base-layer" style="font-size:.85rem" ${S.obscureLocation ? 'disabled' : ''}>${tileProviderOpts}</select>
           </div>
 
           <div class="settings-row" style="padding:8px 0;border-bottom:1px solid var(--border)">
@@ -260,6 +263,12 @@ const ExportScreen = (() => {
     if (tab === 'checklist') bind('checklist-zip-btn', () => _doExport(() => ChecklistExporter.generate(_surveyId), 'species-checklist.zip',       'application/zip'));
 
     if (tab === 'report') {
+      document.getElementById('rpt-obscure')?.addEventListener('change', e => {
+        const sel = document.getElementById('rpt-base-layer');
+        const lbl = sel?.closest('.settings-row')?.querySelectorAll('h4, p');
+        if (sel) sel.disabled = e.target.checked;
+        if (lbl) lbl.forEach(el => el.style.opacity = e.target.checked ? '0.4' : '1');
+      });
       bind('report-btn', async () => {
         const settings = {
           obscureLocation:            document.getElementById('rpt-obscure')?.checked ?? false,

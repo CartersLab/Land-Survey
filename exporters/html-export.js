@@ -35,7 +35,7 @@ const HtmlExporter = (() => {
 
     const S = exportSettingsRaw?.htmlExport || {};
     const obscure     = S.obscureLocation ?? false;
-    const baseLayer   = obscure ? 'cartoVoyager' : (S.baseLayer || 'osm');
+    const baseLayer   = obscure ? 'stadia' : (S.baseLayer || 'osm');
     const stripCoords = obscure && (S.stripCoordinatesFromPopups ?? true);
     const showDl      = S.showDownloadButtons ?? true;
     const tp          = CONFIG.TILE_PROVIDERS[baseLayer] || CONFIG.TILE_PROVIDERS.osm;
