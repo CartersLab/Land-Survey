@@ -33,7 +33,7 @@ const HtmlExporter = (() => {
     const S = exportSettingsRaw?.htmlExport || {};
     const obscure         = S.obscureLocation    ?? false;
     const obscureLevel    = S.obscureLevel        || 'medium';
-    const baseLayer       = obscure ? (S.obscureBaseLayer || 'stadia') : (S.baseLayer || 'cartoVoyager');
+    const baseLayer       = obscure ? (S.obscureBaseLayer || 'cartoVoyager') : (S.baseLayer || 'osm');
     const stripCoords     = obscure && (S.stripCoordinatesFromPopups ?? true);
     const hideScale       = obscure && (S.hideScaleBar ?? false);
     const stripPhotos     = obscure && obscureLevel === 'high' && (S.stripPhotos ?? false);
@@ -118,7 +118,7 @@ const HtmlExporter = (() => {
       },
       observations: obsData,
       stands:       standData,
-      meta: { stripCoords, hideScale, showDl, exportDate },
+      meta: { stripCoords, hideScale, showDl, exportDate, obscure },
       tileUrl:        tp.url,
       tileAttr:       tp.attribution,
       tileSubdomains: tp.subdomains || 'abc',
@@ -262,22 +262,26 @@ const DATA = ${dataJson.replace(/<\/script>/gi, '<\\/script>')};
     try{
       map = L.map('map',{ center: D.center, zoom: 15, zoomControl: true, attributionControl: true });
       if(!meta.hideScale) L.control.scale({imperial:true,metric:true}).addTo(map);
-      var _BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-      var _tileSets = {};
-      Object.keys(D.allowedTiles).forEach(function(z){ _tileSets[+z] = new Set(D.allowedTiles[z]); });
-      var ObsLayer = L.TileLayer.extend({
-        createTile: function(coords, done){
-          var s = _tileSets[coords.z];
-          if(!s || !s.has(coords.x+':'+coords.y)){
-            var img = document.createElement('img');
-            img.src = _BLANK;
-            img.onload = function(){ done(null, img); };
-            return img;
+      if(meta.obscure){
+        var _BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+        var _tileSets = {};
+        Object.keys(D.allowedTiles).forEach(function(z){ _tileSets[+z] = new Set(D.allowedTiles[z]); });
+        var ObsLayer = L.TileLayer.extend({
+          createTile: function(coords, done){
+            var s = _tileSets[coords.z];
+            if(!s || !s.has(coords.x+':'+coords.y)){
+              var img = document.createElement('img');
+              img.src = _BLANK;
+              img.onload = function(){ done(null, img); };
+              return img;
+            }
+            return L.TileLayer.prototype.createTile.call(this, coords, done);
           }
-          return L.TileLayer.prototype.createTile.call(this, coords, done);
-        }
-      });
-      new ObsLayer(D.tileUrl,{ attribution: D.tileAttr, maxZoom: 19, subdomains: D.tileSubdomains }).addTo(map);
+        });
+        new ObsLayer(D.tileUrl,{ attribution: D.tileAttr, maxZoom: 19, subdomains: D.tileSubdomains }).addTo(map);
+      } else {
+        L.tileLayer(D.tileUrl,{ attribution: D.tileAttr, maxZoom: 19, subdomains: D.tileSubdomains }).addTo(map);
+      }
       markerLayer = (typeof L.markerClusterGroup === 'function')
         ? L.markerClusterGroup({ maxClusterRadius:40, disableClusteringAtZoom:17, showCoverageOnHover:false,
             iconCreateFunction: function(cl){
