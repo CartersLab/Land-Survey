@@ -1,5 +1,27 @@
 const HtmlExporter = (() => {
 
+  function _latLngToTile(lat, lng, z) {
+    const n = Math.pow(2, z);
+    const x = Math.floor((lng + 180) / 360 * n);
+    const latRad = lat * Math.PI / 180;
+    const y = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n);
+    return [x, y];
+  }
+
+  function _buildAllowedTiles(observations) {
+    const result = {};
+    for (let z = 10; z <= 19; z++) {
+      const keys = new Set();
+      for (const o of observations) {
+        if (!o.lat || !o.lng) continue;
+        const [x, y] = _latLngToTile(o.lat, o.lng, z);
+        keys.add(`${x}:${y}`);
+      }
+      result[z] = [...keys];
+    }
+    return result;
+  }
+
   async function generate(surveyId) {
     const [obs, stands, survey, exportSettingsRaw] = await Promise.all([
       DB.getAllByIndex('observations', 'surveyId', surveyId),
@@ -11,7 +33,7 @@ const HtmlExporter = (() => {
     const S = exportSettingsRaw?.htmlExport || {};
     const obscure         = S.obscureLocation    ?? false;
     const obscureLevel    = S.obscureLevel        || 'medium';
-    const baseLayer       = obscure ? (S.obscureBaseLayer || 'stadia') : (S.baseLayer || 'osm');
+    const baseLayer       = obscure ? (S.obscureBaseLayer || 'stadia') : (S.baseLayer || 'cartoVoyager');
     const stripCoords     = obscure && (S.stripCoordinatesFromPopups ?? true);
     const hideScale       = obscure && (S.hideScaleBar ?? false);
     const stripPhotos     = obscure && obscureLevel === 'high' && (S.stripPhotos ?? false);
@@ -97,8 +119,10 @@ const HtmlExporter = (() => {
       observations: obsData,
       stands:       standData,
       meta: { stripCoords, hideScale, showDl, exportDate },
-      tileUrl:  tp.url,
-      tileAttr: tp.attribution,
+      tileUrl:        tp.url,
+      tileAttr:       tp.attribution,
+      tileSubdomains: tp.subdomains || 'abc',
+      allowedTiles:   _buildAllowedTiles(obsData),
       center,
     });
 
@@ -238,7 +262,22 @@ const DATA = ${dataJson.replace(/<\/script>/gi, '<\\/script>')};
     try{
       map = L.map('map',{ center: D.center, zoom: 15, zoomControl: true, attributionControl: true });
       if(!meta.hideScale) L.control.scale({imperial:true,metric:true}).addTo(map);
-      L.tileLayer(D.tileUrl,{ attribution: D.tileAttr, maxZoom: 19 }).addTo(map);
+      var _BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+      var _tileSets = {};
+      Object.keys(D.allowedTiles).forEach(function(z){ _tileSets[+z] = new Set(D.allowedTiles[z]); });
+      var ObsLayer = L.TileLayer.extend({
+        createTile: function(coords, done){
+          var s = _tileSets[coords.z];
+          if(!s || !s.has(coords.x+':'+coords.y)){
+            var img = document.createElement('img');
+            img.src = _BLANK;
+            img.onload = function(){ done(null, img); };
+            return img;
+          }
+          return L.TileLayer.prototype.createTile.call(this, coords, done);
+        }
+      });
+      new ObsLayer(D.tileUrl,{ attribution: D.tileAttr, maxZoom: 19, subdomains: D.tileSubdomains }).addTo(map);
       markerLayer = (typeof L.markerClusterGroup === 'function')
         ? L.markerClusterGroup({ maxClusterRadius:40, disableClusteringAtZoom:17, showCoverageOnHover:false,
             iconCreateFunction: function(cl){

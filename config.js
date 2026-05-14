@@ -11,11 +11,19 @@ const CONFIG = {
     CLUSTER_NEARBY_MULTIPLIER: 1.5,
   },
   TILE_PROVIDERS: {
+    cartoVoyager: {
+      name: 'Roads (No Labels)',
+      url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
+      maxZoom: 19,
+      subdomains: 'abcd',
+    },
     osm: {
-      name: 'OpenStreetMap',
+      name: 'OpenStreetMap (Labels)',
       url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       attribution: '© OpenStreetMap contributors',
       maxZoom: 19,
+      subdomains: 'abc',
     },
     stadia: {
       name: 'Terrain (No Labels)',
@@ -52,7 +60,7 @@ const CONFIG = {
   },
   APP: {
     VERSION: '1.1.0',
-    BUILD:   '2026-05-14 08:49',
+    BUILD:   '2026-05-14 09:01',
     DEFAULT_SURVEYOR: '',
     DEFAULT_COUNTY: 'Livingston',
     DEFAULT_TOWNSHIP: 'Tyrone',

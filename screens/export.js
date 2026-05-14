@@ -150,7 +150,7 @@ const ExportScreen = (() => {
     const appSettings = await DB.getRaw('appSettings', 'defaults').catch(() => null) || {};
     const S = appSettings.htmlExport || {};
     const tileProviderOpts = Object.entries(CONFIG.TILE_PROVIDERS)
-      .map(([k, p]) => `<option value="${k}"${(S.baseLayer||'osm')===k?' selected':''}>${p.name}</option>`)
+      .map(([k, p]) => `<option value="${k}"${(S.baseLayer||'cartoVoyager')===k?' selected':''}>${p.name}</option>`)
       .join('');
     const obscureLayerOpts = Object.entries(CONFIG.TILE_PROVIDERS)
       .map(([k, p]) => `<option value="${k}"${(S.obscureBaseLayer||'stadia')===k?' selected':''}>${p.name}</option>`)
