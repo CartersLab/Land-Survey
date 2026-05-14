@@ -8,18 +8,21 @@ const HtmlExporter = (() => {
     return [x, y];
   }
 
+  const OBSCURE_ZOOM   = 15; // tile layer is locked to this zoom
+  const OBSCURE_BUFFER = 1;  // ±1 tile in each direction around each observation
+
   function _buildAllowedTiles(observations) {
-    const result = {};
-    for (let z = 10; z <= 19; z++) {
-      const keys = new Set();
-      for (const o of observations) {
-        if (!o.lat || !o.lng) continue;
-        const [x, y] = _latLngToTile(o.lat, o.lng, z);
-        keys.add(`${x}:${y}`);
+    const keys = new Set();
+    for (const o of observations) {
+      if (!o.lat || !o.lng) continue;
+      const [cx, cy] = _latLngToTile(o.lat, o.lng, OBSCURE_ZOOM);
+      for (let dx = -OBSCURE_BUFFER; dx <= OBSCURE_BUFFER; dx++) {
+        for (let dy = -OBSCURE_BUFFER; dy <= OBSCURE_BUFFER; dy++) {
+          keys.add(`${cx + dx}:${cy + dy}`);
+        }
       }
-      result[z] = [...keys];
     }
-    return result;
+    return [...keys];
   }
 
   async function generate(surveyId) {
@@ -100,10 +103,11 @@ const HtmlExporter = (() => {
       observations: obsData,
       stands:       standData,
       meta: { stripCoords, showDl, exportDate, obscure },
-      tileUrl:        tp.url,
-      tileAttr:       tp.attribution,
-      tileSubdomains: tp.subdomains || 'abc',
-      allowedTiles:   _buildAllowedTiles(obsData),
+      tileUrl:          tp.url,
+      tileAttr:         tp.attribution,
+      tileSubdomains:   tp.subdomains || 'abc',
+      allowedTiles:     obscure ? _buildAllowedTiles(obsData) : [],
+      tileNativeZoom:   OBSCURE_ZOOM,
       center,
     });
 
@@ -241,16 +245,14 @@ const DATA = ${dataJson.replace(/<\/script>/gi, '<\\/script>')};
 
   if(mapOk){
     try{
-      map = L.map('map',{ center: D.center, zoom: 15, zoomControl: true, attributionControl: true });
+      map = L.map('map',{ center: D.center, zoom: 15, minZoom: meta.obscure ? 12 : 3, zoomControl: true, attributionControl: true });
       L.control.scale({imperial:true,metric:true}).addTo(map);
       if(meta.obscure){
         var _BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-        var _tileSets = {};
-        Object.keys(D.allowedTiles).forEach(function(z){ _tileSets[+z] = new Set(D.allowedTiles[z]); });
+        var _tileSet = new Set(D.allowedTiles);
         var ObsLayer = L.TileLayer.extend({
           createTile: function(coords, done){
-            var s = _tileSets[coords.z];
-            if(!s || !s.has(coords.x+':'+coords.y)){
+            if(!_tileSet.has(coords.x+':'+coords.y)){
               var img = document.createElement('img');
               img.src = _BLANK;
               img.onload = function(){ done(null, img); };
@@ -259,7 +261,7 @@ const DATA = ${dataJson.replace(/<\/script>/gi, '<\\/script>')};
             return L.TileLayer.prototype.createTile.call(this, coords, done);
           }
         });
-        new ObsLayer(D.tileUrl,{ attribution: D.tileAttr, maxZoom: 19, subdomains: D.tileSubdomains }).addTo(map);
+        new ObsLayer(D.tileUrl,{ attribution: D.tileAttr, maxZoom: 19, minNativeZoom: D.tileNativeZoom, maxNativeZoom: D.tileNativeZoom, subdomains: D.tileSubdomains }).addTo(map);
       } else {
         L.tileLayer(D.tileUrl,{ attribution: D.tileAttr, maxZoom: 19, subdomains: D.tileSubdomains }).addTo(map);
       }
