@@ -8,11 +8,12 @@ const MapScreen = (() => {
   let _layerPanelOpen  = false;
 
   // Cluster scan state
-  let _scanQueue        = [];
-  let _scanIdx          = 0;
-  let _scanHighlight    = null;
-  let _activeScanToast  = null;
-  let _scanSettings     = { rangeM: 20, minCount: 3, perSpecies: [] };
+  let _scanQueue         = [];
+  let _scanIdx           = 0;
+  let _scanHighlight     = null;
+  let _activeScanToast   = null;
+  let _scanSettings      = { rangeM: 20, minCount: 3, perSpecies: [] };
+  let _scanDebounceTimer = null;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -330,6 +331,13 @@ const MapScreen = (() => {
       if (lbl) lbl.textContent = val + 'm';
       _scanSettings.rangeM = val;
       _saveScanSettings();
+      clearTimeout(_scanDebounceTimer);
+      _scanDebounceTimer = setTimeout(() => {
+        _layerPanelOpen = false;
+        const p = document.getElementById('map-layer-panel');
+        if (p) p.style.display = 'none';
+        _startAutoScan();
+      }, 800);
     });
 
     panel.querySelector('#scan-min')?.addEventListener('change', e => {
@@ -461,57 +469,103 @@ const MapScreen = (() => {
     }
 
     const item = _scanQueue[_scanIdx];
-    const obs  = item.observations;
 
-    // Highlight matching obs
     if (!_scanHighlight) _scanHighlight = L.layerGroup().addTo(_map);
     _scanHighlight.clearLayers();
-    for (const o of obs) {
-      L.circleMarker([o.lat, o.lng], {
+
+    if (item.type === 'expand') {
+      // ── Expand: add one ungrouped obs to an existing cluster ──────────────
+      const { observation: obs, stand } = item;
+      const specName = obs.commonName || obs.scientificName || 'Species';
+      const clusterName = stand.name || stand.primarySpeciesName || 'Cluster';
+
+      // Highlight the candidate obs
+      L.circleMarker([obs.lat, obs.lng], {
         radius: 13, fillColor: '#f39c12', color: '#e67e22',
         weight: 3, fillOpacity: 0.7, opacity: 1,
       }).addTo(_scanHighlight);
-    }
 
-    // Zoom to group
-    const bounds = L.latLngBounds(obs.map(o => [o.lat, o.lng]));
-    _map.fitBounds(bounds.pad(0.5), { animate: true, maxZoom: 18 });
-
-    // Compute max spread
-    let maxDist = 0;
-    for (let i = 0; i < obs.length; i++)
-      for (let j = i + 1; j < obs.length; j++) {
-        const d = distanceMeters(obs[i].lat, obs[i].lng, obs[j].lat, obs[j].lng);
-        if (d > maxDist) maxDist = d;
+      // Also pulse the cluster centroid / members so it's clear which cluster
+      if (stand.centroid) {
+        L.circleMarker([stand.centroid.lat, stand.centroid.lng], {
+          radius: 16, fillColor: '#8e44ad', color: '#6c3483',
+          weight: 3, fillOpacity: 0.4, opacity: 1,
+        }).addTo(_scanHighlight);
       }
 
-    const specName = obs[0].commonName || obs[0].scientificName || 'Species';
-    const gbifKey  = obs[0].gbifKey;
+      // Zoom to include both the obs and the cluster centroid
+      const pts = [[obs.lat, obs.lng]];
+      if (stand.centroid) pts.push([stand.centroid.lat, stand.centroid.lng]);
+      _map.fitBounds(L.latLngBounds(pts).pad(0.5), { animate: true, maxZoom: 18 });
 
-    _activeScanToast = UI.scanClusterToast(specName, obs.length, maxDist, {
-      onYes: async () => {
-        _activeScanToast = null;
-        _clearScanHighlight();
-        await Clusters.createFromScan(_surveyId, item);
-        window._refreshMapMarkers?.();
-        _scanIdx++;
-        setTimeout(_processNextScan, 400);
-      },
-      onSkip: () => {
-        _activeScanToast = null;
-        _clearScanHighlight();
-        _scanIdx++;
-        _processNextScan();
-      },
-      onSkipAll: () => {
-        _activeScanToast = null;
-        _clearScanHighlight();
-        _scanQueue = _scanQueue.filter((c, i) =>
-          i < _scanIdx || c.observations[0].gbifKey !== gbifKey
-        );
-        _processNextScan();
-      },
-    });
+      _activeScanToast = UI.expandClusterToast(specName, clusterName, {
+        onYes: async () => {
+          _activeScanToast = null;
+          _clearScanHighlight();
+          obs.standId = stand.id;
+          await DB.put('observations', obs);
+          await Clusters.refreshStand(_surveyId, stand.id);
+          window._refreshMapMarkers?.();
+          _scanIdx++;
+          setTimeout(_processNextScan, 400);
+        },
+        onSkip: () => {
+          _activeScanToast = null;
+          _clearScanHighlight();
+          _scanIdx++;
+          _processNextScan();
+        },
+      });
+
+    } else {
+      // ── New: form a brand-new cluster from ungrouped obs ──────────────────
+      const obs     = item.observations;
+      const gbifKey = obs[0].gbifKey;
+
+      for (const o of obs) {
+        L.circleMarker([o.lat, o.lng], {
+          radius: 13, fillColor: '#f39c12', color: '#e67e22',
+          weight: 3, fillOpacity: 0.7, opacity: 1,
+        }).addTo(_scanHighlight);
+      }
+
+      const bounds = L.latLngBounds(obs.map(o => [o.lat, o.lng]));
+      _map.fitBounds(bounds.pad(0.5), { animate: true, maxZoom: 18 });
+
+      let maxDist = 0;
+      for (let i = 0; i < obs.length; i++)
+        for (let j = i + 1; j < obs.length; j++) {
+          const d = distanceMeters(obs[i].lat, obs[i].lng, obs[j].lat, obs[j].lng);
+          if (d > maxDist) maxDist = d;
+        }
+
+      const specName = obs[0].commonName || obs[0].scientificName || 'Species';
+
+      _activeScanToast = UI.scanClusterToast(specName, obs.length, maxDist, {
+        onYes: async () => {
+          _activeScanToast = null;
+          _clearScanHighlight();
+          await Clusters.createFromScan(_surveyId, item);
+          window._refreshMapMarkers?.();
+          _scanIdx++;
+          setTimeout(_processNextScan, 400);
+        },
+        onSkip: () => {
+          _activeScanToast = null;
+          _clearScanHighlight();
+          _scanIdx++;
+          _processNextScan();
+        },
+        onSkipAll: () => {
+          _activeScanToast = null;
+          _clearScanHighlight();
+          _scanQueue = _scanQueue.filter((c, i) =>
+            i < _scanIdx || (c.type !== 'new' || c.observations[0].gbifKey !== gbifKey)
+          );
+          _processNextScan();
+        },
+      });
+    }
   }
 
   function _clearScanHighlight() {
@@ -715,6 +769,8 @@ const MapScreen = (() => {
 
   function destroy() {
     document.removeEventListener('click', _outsideClick);
+    clearTimeout(_scanDebounceTimer);
+    _scanDebounceTimer = null;
     if (_activeScanToast) { _activeScanToast.dismiss(); _activeScanToast = null; }
     _clearScanHighlight();
     _scanQueue = [];

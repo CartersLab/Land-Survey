@@ -58,29 +58,57 @@ const Clusters = (() => {
   }
 
   // ── Auto-scan: find all potential clusters across the whole survey ─────────
+  //
+  //  Returns two result types:
+  //    { type:'new',    observations:[...] }   — form a brand-new cluster
+  //    { type:'expand', observation, stand }   — add one ungrouped obs to an existing cluster
 
   async function autoScan(surveyId, settings = {}) {
     const { rangeM = RADIUS_M, minCount = MIN_COUNT, perSpecies = [] } = settings;
 
-    const allObs = await DB.getAllByIndex('observations', 'surveyId', surveyId);
+    const [allObs, stands] = await Promise.all([
+      DB.getAllByIndex('observations', 'surveyId', surveyId),
+      DB.getAllByIndex('stands',       'surveyId', surveyId),
+    ]);
+
     const ungrouped = allObs.filter(o =>
       PLANT_CATS.has(o.category) && !o.standId && o.gbifKey && o.lat && o.lng
     );
 
+    const results = [];
+
+    // ── Pass 1: groups of ungrouped obs that should form a NEW cluster ──────
     const bySpecies = new Map();
     for (const o of ungrouped) {
       if (!bySpecies.has(o.gbifKey)) bySpecies.set(o.gbifKey, []);
       bySpecies.get(o.gbifKey).push(o);
     }
 
-    const results = [];
     for (const [gbifKey, obs] of bySpecies) {
       const rule  = perSpecies.find(r => r.gbifKey === gbifKey);
       const range = rule?.rangeM   ?? rangeM;
       const min   = rule?.minCount ?? minCount;
 
       for (const comp of _connectedComponents(obs, range)) {
-        if (comp.length >= min) results.push({ observations: comp });
+        if (comp.length >= min) results.push({ type: 'new', observations: comp });
+      }
+    }
+
+    // ── Pass 2: ungrouped obs that should JOIN an existing cluster ───────────
+    for (const stand of stands) {
+      const rule  = perSpecies.find(r => r.gbifKey === stand.primaryGbifKey);
+      const range = rule?.rangeM ?? rangeM;
+
+      const members = allObs.filter(o => o.standId === stand.id && o.lat && o.lng);
+      if (!members.length) continue;
+
+      const candidates = ungrouped.filter(o =>
+        o.gbifKey === stand.primaryGbifKey &&
+        members.some(m => distanceMeters(o.lat, o.lng, m.lat, m.lng) <= range)
+      );
+
+      for (const obs of candidates) {
+        results.push({ type: 'expand', observation: obs, stand });
       }
     }
 

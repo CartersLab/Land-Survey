@@ -308,6 +308,14 @@ const UI = (() => {
     ], 0);
   }
 
+  function expandClusterToast(specName, clusterName, callbacks = {}) {
+    const msg = `Add this ${escapeHtml(specName)} to "${escapeHtml(clusterName)}"?`;
+    return toast(msg, 'cluster', [
+      { label: 'Yes, Add', action: callbacks.onYes  || (() => {}), style: 'btn-primary' },
+      { label: 'Skip',     action: callbacks.onSkip || (() => {}), style: 'btn-secondary' },
+    ], 0);
+  }
+
   // ── Offline banner ───────────────────────────────────────────────────────
 
   let _offlineBanner = null;
@@ -420,6 +428,7 @@ const UI = (() => {
     clusterToast,
     addToStandToast,
     scanClusterToast,
+    expandClusterToast,
     offlineBanner,
     swUpdateToast,
     newSurveyModal,
