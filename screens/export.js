@@ -268,7 +268,7 @@ const ExportScreen = (() => {
           showInventoryTable:         document.getElementById('rpt-show-inv')?.checked ?? true,
           stripCoordinatesFromPopups: document.getElementById('rpt-obscure')?.checked ?? false,
         };
-        await DB.putRaw('exportSettings', _surveyId, { htmlExport: settings }).catch(() => {});
+        await DB.put('exportSettings', { id: _surveyId, htmlExport: settings }).catch(() => {});
         _doExport(() => HtmlExporter.generate(_surveyId), 'field-report.html', 'text/html');
       });
     }
