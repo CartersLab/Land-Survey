@@ -80,6 +80,7 @@ const Markers = (() => {
       fillOpacity: 0.22,
       weight:      2,
       opacity:     0.8,
+      pane:        'clustersPane',
     });
     poly.standId = stand.id;
     poly.bindPopup(() => buildStandPopup(stand), { maxWidth: 280 });

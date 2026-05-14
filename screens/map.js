@@ -87,6 +87,9 @@ const MapScreen = (() => {
     _tileLayer = Tiles.createLayer(_tileSource);
     _tileLayer.addTo(_map);
 
+    _map.createPane('clustersPane');
+    _map.getPane('clustersPane').style.zIndex = 350; // below overlayPane (400) so obs markers sit on top
+
     _standLayer = L.layerGroup().addTo(_map);
 
     if (typeof L.markerClusterGroup === 'function') {
