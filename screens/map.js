@@ -15,6 +15,9 @@ const MapScreen = (() => {
   let _scanSettings      = { rangeM: 20, minCount: 3, perSpecies: [] };
   let _scanDebounceTimer = null;
 
+  // Cluster label state
+  let _labelStands = [];
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   async function render(container, params) {
@@ -117,6 +120,8 @@ const MapScreen = (() => {
     }
 
     setTimeout(() => { if (_map) _map.invalidateSize(); }, 150);
+
+    _map.on('zoomend', _updateClusterLabels);
 
     _map.on('moveend', () => {
       State.set('mapCenter', [_map.getCenter().lat, _map.getCenter().lng]);
@@ -731,14 +736,67 @@ const MapScreen = (() => {
         _markerLayer.addLayer(Markers.createObsMarker(o));
       }
 
+      _labelStands = [];
       for (const s of stands) {
         if (!s.polygon || s.polygon.length < 3) continue;
         if (toggles[s.category] === false) continue;
         const poly = Markers.createStandMarker(s);
         if (poly) _standLayer.addLayer(poly);
+        if (s.centroid) _labelStands.push(s);
       }
+      requestAnimationFrame(_updateClusterLabels);
     } catch (err) {
       console.error('[MapScreen] _loadMarkers:', err);
+    }
+  }
+
+  // ── Cluster name labels (SVG text fitted to polygon bounds) ──────────────
+
+  function _updateClusterLabels() {
+    if (!_map) return;
+    const pane = _map.getPane('clustersPane');
+    if (!pane) return;
+    const svg = pane.querySelector('svg');
+    if (!svg) return;
+
+    svg.querySelectorAll('.cluster-label-text').forEach(el => el.remove());
+
+    for (const stand of _labelStands) {
+      const name = (stand.name || stand.primarySpeciesName || '').trim();
+      if (!name) continue;
+
+      const pts = stand.polygon.map(p => _map.latLngToLayerPoint([p.lat, p.lng]));
+      const xs  = pts.map(p => p.x);
+      const ys  = pts.map(p => p.y);
+      const polyW = Math.max(...xs) - Math.min(...xs);
+      const polyH = Math.max(...ys) - Math.min(...ys);
+      const center = _map.latLngToLayerPoint([stand.centroid.lat, stand.centroid.lng]);
+
+      // Fill ~80% of the narrower polygon dimension; limit text stretch ratio
+      const textLength = Math.min(polyW * 0.85, polyH * 3.5) * 0.85;
+      if (textLength < 18) continue; // polygon too small on screen to label
+
+      // Font height capped to ~30% of polygon height so it sits comfortably inside
+      const fontSize = Math.min(22, Math.max(7, polyH * 0.28));
+
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x',                center.x);
+      text.setAttribute('y',                center.y);
+      text.setAttribute('text-anchor',      'middle');
+      text.setAttribute('dominant-baseline','middle');
+      text.setAttribute('textLength',       textLength);
+      text.setAttribute('lengthAdjust',     'spacingAndGlyphs');
+      text.setAttribute('font-size',        fontSize);
+      text.setAttribute('font-family',      'sans-serif');
+      text.setAttribute('font-weight',      'bold');
+      text.setAttribute('fill',             'white');
+      text.setAttribute('stroke',           'rgba(0,0,0,0.55)');
+      text.setAttribute('stroke-width',     '3');
+      text.setAttribute('paint-order',      'stroke fill');
+      text.setAttribute('pointer-events',   'none');
+      text.setAttribute('class',            'cluster-label-text');
+      text.textContent = name;
+      svg.appendChild(text);
     }
   }
 
@@ -885,6 +943,7 @@ const MapScreen = (() => {
     window._deleteObs         = null;
     window._editCluster       = null;
     window._deleteCluster     = null;
+    _labelStands  = [];
     if (_map) { _map.remove(); _map = null; }
     _markerLayer  = null;
     _standLayer   = null;
