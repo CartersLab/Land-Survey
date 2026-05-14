@@ -3,7 +3,7 @@ const Clusters = (() => {
   const MIN_COUNT = CONFIG.MAP.CLUSTER_MIN_COUNT;
 
   async function checkForClusters(surveyId, newObs) {
-    if (!newObs.gbifKey || newObs.gbifKey < 0) return;
+    if (!newObs.gbifKey) return;
     if (newObs.category === 'sign-evidence') return;
     if (!newObs.lat || !newObs.lng) return;
 
