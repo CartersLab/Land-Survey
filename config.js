@@ -52,7 +52,7 @@ const CONFIG = {
   },
   APP: {
     VERSION: '1.1.0',
-    BUILD:   '2026-05-14 08:00',
+    BUILD:   '2026-05-14 08:49',
     DEFAULT_SURVEYOR: '',
     DEFAULT_COUNTY: 'Livingston',
     DEFAULT_TOWNSHIP: 'Tyrone',

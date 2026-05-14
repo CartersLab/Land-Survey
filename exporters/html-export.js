@@ -481,7 +481,7 @@ const DATA = ${dataJson.replace(/<\/script>/gi, '<\\/script>')};
       var sp={};
       obs.forEach(function(o){ if(!o.scientificName) return; var k=(o.category||'')+'|'+o.scientificName; if(!sp[k]) sp[k]={category:o.category,sci:o.scientificName,common:o.commonName,gbif:o.gbifKey,n:0,dates:[],rare:false}; sp[k].n++; if(o.observedAt) sp[k].dates.push(o.observedAt); if(o.isRare) sp[k].rare=true; });
       Object.values(sp).sort(function(a,b){return (a.category+a.sci).localeCompare(b.category+b.sci);}).forEach(function(r){ var d=r.dates.sort(); rows.push([r.category,r.sci,r.common||'',r.gbif||'',r.n,d[0]||'',d[d.length-1]||'',r.rare]); });
-      dl(rows.map(function(r){return r.map(function(v){var s=String(v);return(s.includes(',')||s.includes('"'))?'"'+s.replace(/"/g,'""')+'"':s;}).join(',');}).join('\n'),'text/csv','species-checklist.csv');
+      dl(rows.map(function(r){return r.map(function(v){var s=String(v);return(s.includes(',')||s.includes('"'))?'"'+s.replace(/"/g,'""')+'"':s;}).join(',');}).join('\\n'),'text/csv','species-checklist.csv');
     });
   }
 
