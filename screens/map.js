@@ -7,6 +7,13 @@ const MapScreen = (() => {
   let _tileSource      = 'osm';
   let _layerPanelOpen  = false;
 
+  // Cluster scan state
+  let _scanQueue        = [];
+  let _scanIdx          = 0;
+  let _scanHighlight    = null;
+  let _activeScanToast  = null;
+  let _scanSettings     = { rangeM: 20, minCount: 3, perSpecies: [] };
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   async function render(container, params) {
@@ -38,6 +45,7 @@ const MapScreen = (() => {
       </div>`;
 
     try {
+      await _loadScanSettings();
       _initMap();
       _buildLayerPanel();
       _bindEvents();
@@ -46,7 +54,7 @@ const MapScreen = (() => {
       window._refreshMapMarkers = () => _loadMarkers();
       window._editObs    = _handleEditObs;
       window._deleteObs  = _handleDeleteObs;
-      window._editStand  = _handleEditStand;
+      window._renameCluster = _handleRenameCluster;
     } catch (err) {
       console.error('[MapScreen] init failed:', err);
       container.innerHTML = `
@@ -67,7 +75,7 @@ const MapScreen = (() => {
 
     _map = L.map('map', {
       center, zoom,
-      zoomControl:       true,
+      zoomControl:        true,
       attributionControl: true,
     });
 
@@ -78,9 +86,9 @@ const MapScreen = (() => {
 
     if (typeof L.markerClusterGroup === 'function') {
       _markerLayer = L.markerClusterGroup({
-        maxClusterRadius:       40,
+        maxClusterRadius:        40,
         disableClusteringAtZoom: 17,
-        showCoverageOnHover:    false,
+        showCoverageOnHover:     false,
         iconCreateFunction: cluster => L.divIcon({
           html: `<div style="background:var(--green-primary);color:#fff;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.82rem;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">${cluster.getChildCount()}</div>`,
           className: '', iconSize: [34, 34], iconAnchor: [17, 17],
@@ -91,7 +99,6 @@ const MapScreen = (() => {
     }
     _map.addLayer(_markerLayer);
 
-    // Locate control (GPS button) — plugin may not be loaded
     if (typeof L.control.locate === 'function') {
       L.control.locate({
         position:  'bottomright',
@@ -101,10 +108,8 @@ const MapScreen = (() => {
       }).addTo(_map);
     }
 
-    // Ensure Leaflet reads the correct map container dimensions
     setTimeout(() => { if (_map) _map.invalidateSize(); }, 150);
 
-    // Persist map state
     _map.on('moveend', () => {
       State.set('mapCenter', [_map.getCenter().lat, _map.getCenter().lng]);
       State.set('mapZoom',   _map.getZoom());
@@ -161,7 +166,6 @@ const MapScreen = (() => {
     mapEl.addEventListener('touchmove',  e => move(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
     mapEl.addEventListener('touchend',   end, { passive: true });
 
-    // Mouse support for laptop testing
     mapEl.addEventListener('mousedown',  e => { if (e.button === 0) start(e.clientX, e.clientY); });
     mapEl.addEventListener('mousemove',  e => move(e.clientX, e.clientY));
     mapEl.addEventListener('mouseup',    end);
@@ -190,6 +194,19 @@ const MapScreen = (() => {
     Router.navigate('form', { surveyId: _surveyId });
   }
 
+  // ── Scan settings persistence ─────────────────────────────────────────────
+
+  async function _loadScanSettings() {
+    try {
+      const saved = await DB.getRaw('appSettings', 'clusterScanSettings');
+      if (saved) _scanSettings = saved;
+    } catch {}
+  }
+
+  function _saveScanSettings() {
+    DB.putRaw('appSettings', 'clusterScanSettings', _scanSettings).catch(() => {});
+  }
+
   // ── Layer panel ───────────────────────────────────────────────────────────
 
   function _buildLayerPanel() {
@@ -215,24 +232,75 @@ const MapScreen = (() => {
 
     const toggles = State.get('activeLayerToggles');
 
+    const typesContent = cats.map(c => {
+      const color  = Markers.colorForCat(c.key);
+      const hidden = toggles[c.key] === false;
+      return `<button class="layer-toggle-chip${hidden ? ' hidden' : ''}" data-cat="${c.key}">
+        <span class="cat-dot" style="background:${color}"></span>${c.label}
+      </button>`;
+    }).join('');
+
     const providerBtns = Object.entries(CONFIG.TILE_PROVIDERS)
       .map(([k, p]) => `<button class="tile-source-btn${k === _tileSource ? ' active' : ''}" data-provider="${k}">${p.name}</button>`)
       .join('');
 
+    const rulesHtml = _scanSettings.perSpecies.map((rule, i) => `
+      <div class="scan-rule-row" data-rule-idx="${i}">
+        <span class="rule-species-label">${escapeHtml(rule.specName || 'Unknown')}</span>
+        <span class="rule-detail">${rule.rangeM}m / ${rule.minCount}+</span>
+        <button class="rule-del" data-idx="${i}">×</button>
+      </div>`).join('');
+
     panel.innerHTML = `
-      <h4>Observation Types</h4>
-      ${cats.map(c => {
-        const color  = Markers.colorForCat(c.key);
-        const hidden = toggles[c.key] === false;
-        return `<button class="layer-toggle-chip${hidden ? ' hidden' : ''}" data-cat="${c.key}">
-          <span class="cat-dot" style="background:${color}"></span>${c.label}
-        </button>`;
-      }).join('')}
-      <div class="tile-source-toggles">
-        <h4>Map Style</h4>
-        ${providerBtns}
+      <div class="layer-tabs">
+        <button class="layer-tab active" data-tab="types">Obs Types</button>
+        <button class="layer-tab" data-tab="style">Map Style</button>
+        <button class="layer-tab" data-tab="clusters">Clusters</button>
+      </div>
+      <div class="layer-tab-pane active" id="ltab-types">
+        ${typesContent}
+      </div>
+      <div class="layer-tab-pane" id="ltab-style">
+        <div class="tile-source-toggles" style="border-top:none;margin-top:0;padding-top:0">
+          ${providerBtns}
+        </div>
+      </div>
+      <div class="layer-tab-pane" id="ltab-clusters">
+        <div class="scan-settings">
+          <div class="form-group scan-range-group">
+            <div class="scan-range-label">
+              <span>Cluster Range</span>
+              <span class="scan-range-val">${_scanSettings.rangeM}m</span>
+            </div>
+            <input type="range" id="scan-range" min="5" max="100" step="5" value="${_scanSettings.rangeM}">
+          </div>
+          <div class="scan-count-row">
+            <label for="scan-min">Min. observations</label>
+            <input type="number" id="scan-min" min="2" max="20" value="${_scanSettings.minCount}">
+          </div>
+          <div class="scan-rules-section">
+            <div class="scan-rules-header">
+              <span>Per-Species Rules</span>
+              <button class="btn btn-sm btn-secondary" id="scan-add-rule">+ Add</button>
+            </div>
+            <div id="scan-rules">${rulesHtml || '<span class="scan-no-rules">No custom rules</span>'}</div>
+          </div>
+          <button class="btn btn-primary" id="scan-btn" style="width:100%;margin-top:12px">
+            Scan for Clusters
+          </button>
+        </div>
       </div>`;
 
+    // Tab switching
+    panel.querySelectorAll('.layer-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const t = btn.dataset.tab;
+        panel.querySelectorAll('.layer-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+        panel.querySelectorAll('.layer-tab-pane').forEach(p => p.classList.toggle('active', p.id === `ltab-${t}`));
+      });
+    });
+
+    // Observation type toggles
     panel.querySelectorAll('[data-cat]').forEach(btn => {
       btn.addEventListener('click', () => {
         const cat = btn.dataset.cat;
@@ -244,14 +312,245 @@ const MapScreen = (() => {
       });
     });
 
+    // Tile provider buttons
     panel.querySelectorAll('[data-provider]').forEach(btn => {
       btn.addEventListener('click', () => {
         const key = btn.dataset.provider;
         if (_tileLayer) _tileLayer.remove();
         try { _tileLayer = Tiles.createLayer(key); _tileLayer.addTo(_map); _tileLayer.bringToBack(); _tileSource = key; }
-        catch { UI.toastError('Cannot switch layer — no API key?'); }
+        catch { UI.toastError('Cannot switch layer'); }
         panel.querySelectorAll('[data-provider]').forEach(b => b.classList.toggle('active', b.dataset.provider === key));
       });
+    });
+
+    // Cluster tab events
+    panel.querySelector('#scan-range')?.addEventListener('input', e => {
+      const val = Number(e.target.value);
+      const lbl = panel.querySelector('.scan-range-val');
+      if (lbl) lbl.textContent = val + 'm';
+      _scanSettings.rangeM = val;
+      _saveScanSettings();
+    });
+
+    panel.querySelector('#scan-min')?.addEventListener('change', e => {
+      _scanSettings.minCount = Math.max(2, Number(e.target.value) || 3);
+      _saveScanSettings();
+    });
+
+    panel.querySelectorAll('.rule-del').forEach(btn => {
+      btn.addEventListener('click', () => {
+        _scanSettings.perSpecies.splice(Number(btn.dataset.idx), 1);
+        _saveScanSettings();
+        _buildLayerPanel();
+        // Reopen clusters tab after rebuild
+        const panel2 = document.getElementById('map-layer-panel');
+        panel2?.querySelectorAll('.layer-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === 'clusters'));
+        panel2?.querySelectorAll('.layer-tab-pane').forEach(p => p.classList.toggle('active', p.id === 'ltab-clusters'));
+      });
+    });
+
+    panel.querySelector('#scan-add-rule')?.addEventListener('click', _addScanRule);
+
+    panel.querySelector('#scan-btn')?.addEventListener('click', () => {
+      _layerPanelOpen = false;
+      document.getElementById('map-layer-panel').style.display = 'none';
+      _startAutoScan();
+    });
+  }
+
+  // ── Per-species rule addition ─────────────────────────────────────────────
+
+  async function _addScanRule() {
+    let allObs;
+    try { allObs = await DB.getAllByIndex('observations', 'surveyId', _surveyId); }
+    catch { allObs = []; }
+
+    const seen = new Map();
+    for (const o of allObs) {
+      if (Clusters.PLANT_CATS.has(o.category) && o.gbifKey && !seen.has(o.gbifKey)) {
+        seen.set(o.gbifKey, o.commonName || o.scientificName || String(o.gbifKey));
+      }
+    }
+
+    if (!seen.size) {
+      UI.toast('No plant species recorded in this survey yet', 'info', [], 3500);
+      return;
+    }
+
+    const existingKeys = new Set(_scanSettings.perSpecies.map(r => r.gbifKey));
+    const available = [...seen.entries()].filter(([k]) => !existingKeys.has(k));
+
+    if (!available.length) {
+      UI.toast('All observed plant species already have custom rules', 'info', [], 3500);
+      return;
+    }
+
+    const bodyEl = document.createElement('div');
+    bodyEl.innerHTML = `
+      <div class="form-group">
+        <label>Species</label>
+        <select id="rule-sp-pick">
+          ${available.map(([k, n]) => `<option value="${k}">${escapeHtml(n)}</option>`).join('')}
+        </select>
+      </div>
+      <div style="display:flex;gap:12px">
+        <div class="form-group" style="flex:1">
+          <label>Range (m)</label>
+          <input type="number" id="rule-range-pick" min="5" max="200" step="5" value="${_scanSettings.rangeM}">
+        </div>
+        <div class="form-group" style="width:90px">
+          <label>Min. Count</label>
+          <input type="number" id="rule-min-pick" min="2" max="20" value="${_scanSettings.minCount}">
+        </div>
+      </div>`;
+
+    await new Promise(resolve => {
+      UI.modal('Per-Species Rule', bodyEl, {
+        buttons: [
+          { label: 'Cancel',   style: 'btn-secondary', action: () => resolve() },
+          { label: 'Add Rule', style: 'btn-primary',   action: () => {
+            const gbifKey  = Number(document.getElementById('rule-sp-pick')?.value);
+            const specName = available.find(([k]) => k === gbifKey)?.[1] || 'Unknown';
+            _scanSettings.perSpecies.push({
+              gbifKey,
+              specName,
+              rangeM:   Number(document.getElementById('rule-range-pick')?.value  || _scanSettings.rangeM),
+              minCount: Number(document.getElementById('rule-min-pick')?.value || _scanSettings.minCount),
+            });
+            _saveScanSettings();
+            _buildLayerPanel();
+            const panel = document.getElementById('map-layer-panel');
+            panel?.querySelectorAll('.layer-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === 'clusters'));
+            panel?.querySelectorAll('.layer-tab-pane').forEach(p => p.classList.toggle('active', p.id === 'ltab-clusters'));
+            resolve();
+          }},
+        ],
+      });
+    });
+  }
+
+  // ── Auto-scan flow ────────────────────────────────────────────────────────
+
+  async function _startAutoScan() {
+    if (!_map || !_surveyId) return;
+    UI.loading(true, 'Scanning for clusters…');
+    try {
+      _scanQueue = await Clusters.autoScan(_surveyId, _scanSettings);
+    } finally {
+      UI.loading(false);
+    }
+
+    if (!_scanQueue.length) {
+      UI.toast('No new clusters found with current settings', 'info', [], 4000);
+      return;
+    }
+
+    _scanIdx = 0;
+    _processNextScan();
+  }
+
+  function _processNextScan() {
+    if (_activeScanToast) { _activeScanToast.dismiss(); _activeScanToast = null; }
+
+    if (_scanIdx >= _scanQueue.length) {
+      _clearScanHighlight();
+      const total = _scanQueue.length;
+      UI.toastSuccess(`Scan complete — ${total} potential cluster${total !== 1 ? 's' : ''} reviewed`);
+      _scanQueue = [];
+      return;
+    }
+
+    const item = _scanQueue[_scanIdx];
+    const obs  = item.observations;
+
+    // Highlight matching obs
+    if (!_scanHighlight) _scanHighlight = L.layerGroup().addTo(_map);
+    _scanHighlight.clearLayers();
+    for (const o of obs) {
+      L.circleMarker([o.lat, o.lng], {
+        radius: 13, fillColor: '#f39c12', color: '#e67e22',
+        weight: 3, fillOpacity: 0.7, opacity: 1,
+      }).addTo(_scanHighlight);
+    }
+
+    // Zoom to group
+    const bounds = L.latLngBounds(obs.map(o => [o.lat, o.lng]));
+    _map.fitBounds(bounds.pad(0.5), { animate: true, maxZoom: 18 });
+
+    // Compute max spread
+    let maxDist = 0;
+    for (let i = 0; i < obs.length; i++)
+      for (let j = i + 1; j < obs.length; j++) {
+        const d = distanceMeters(obs[i].lat, obs[i].lng, obs[j].lat, obs[j].lng);
+        if (d > maxDist) maxDist = d;
+      }
+
+    const specName = obs[0].commonName || obs[0].scientificName || 'Species';
+    const gbifKey  = obs[0].gbifKey;
+
+    _activeScanToast = UI.scanClusterToast(specName, obs.length, maxDist, {
+      onYes: async () => {
+        _activeScanToast = null;
+        _clearScanHighlight();
+        await Clusters.createFromScan(_surveyId, item);
+        window._refreshMapMarkers?.();
+        _scanIdx++;
+        setTimeout(_processNextScan, 400);
+      },
+      onSkip: () => {
+        _activeScanToast = null;
+        _clearScanHighlight();
+        _scanIdx++;
+        _processNextScan();
+      },
+      onSkipAll: () => {
+        _activeScanToast = null;
+        _clearScanHighlight();
+        _scanQueue = _scanQueue.filter((c, i) =>
+          i < _scanIdx || c.observations[0].gbifKey !== gbifKey
+        );
+        _processNextScan();
+      },
+    });
+  }
+
+  function _clearScanHighlight() {
+    if (_scanHighlight) _scanHighlight.clearLayers();
+  }
+
+  // ── Cluster rename ────────────────────────────────────────────────────────
+
+  async function _handleRenameCluster(standId) {
+    const stand = await DB.get('stands', standId).catch(() => null);
+    if (!stand) return;
+
+    const currentName = stand.name || stand.primarySpeciesName || 'Cluster';
+    const bodyEl = document.createElement('div');
+    bodyEl.innerHTML = `
+      <div class="form-group">
+        <label>Cluster Name</label>
+        <input type="text" id="rename-cluster-input" value="${escapeHtml(currentName)}" autocomplete="off">
+      </div>`;
+
+    await new Promise(resolve => {
+      UI.modal('Rename Cluster', bodyEl, {
+        buttons: [
+          { label: 'Cancel', style: 'btn-secondary', action: () => resolve() },
+          { label: 'Save',   style: 'btn-primary',   action: async () => {
+            const name = document.getElementById('rename-cluster-input')?.value?.trim();
+            if (!name) return;
+            stand.name = name;
+            stand.updatedAt = now();
+            await DB.put('stands', stand);
+            _loadMarkers();
+            resolve();
+          }},
+        ],
+      });
+      setTimeout(() => {
+        const inp = document.getElementById('rename-cluster-input');
+        if (inp) { inp.focus(); inp.select(); }
+      }, 80);
     });
   }
 
@@ -339,14 +638,12 @@ const MapScreen = (() => {
       confirmLabel: 'Delete', dangerous: true,
     });
     if (!ok) return;
+    const standId = obs.standId;
     await DB.delete('observations', obsId);
     _map.closePopup();
+    if (standId) Clusters.refreshStand(_surveyId, standId).catch(() => {});
     _loadMarkers();
     UI.toastSuccess('Observation deleted');
-  }
-
-  function _handleEditStand() {
-    UI.toast('Stand editing coming soon', 'info');
   }
 
   // ── Offline tile cache ────────────────────────────────────────────────────
@@ -418,15 +715,20 @@ const MapScreen = (() => {
 
   function destroy() {
     document.removeEventListener('click', _outsideClick);
+    if (_activeScanToast) { _activeScanToast.dismiss(); _activeScanToast = null; }
+    _clearScanHighlight();
+    _scanQueue = [];
+    _scanIdx   = 0;
     window._refreshMapMarkers = null;
-    window._editObs   = null;
-    window._deleteObs = null;
-    window._editStand = null;
+    window._editObs           = null;
+    window._deleteObs         = null;
+    window._renameCluster     = null;
     if (_map) { _map.remove(); _map = null; }
-    _markerLayer = null;
-    _standLayer  = null;
-    _tileLayer   = null;
-    _surveyId    = null;
+    _markerLayer  = null;
+    _standLayer   = null;
+    _tileLayer    = null;
+    _scanHighlight = null;
+    _surveyId     = null;
   }
 
   return { render, destroy };

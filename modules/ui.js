@@ -292,10 +292,19 @@ const UI = (() => {
    * Show "This [species] is near your [species] stand — add it?" toast.
    */
   function addToStandToast(species, callbacks = {}) {
-    const msg = `This ${escapeHtml(species)} is near your existing stand — add it?`;
+    const msg = `This ${escapeHtml(species)} is near your existing cluster — add it?`;
     return toast(msg, 'cluster', [
       { label: 'Yes',  action: callbacks.onYes || (() => {}), style: 'btn-primary' },
       { label: 'No',   action: callbacks.onNo  || (() => {}), style: 'btn-secondary' },
+    ], 0);
+  }
+
+  function scanClusterToast(specName, count, distM, callbacks = {}) {
+    const msg = `${count} ${escapeHtml(specName)} within ${Math.round(distM)}m — create cluster?`;
+    return toast(msg, 'cluster', [
+      { label: 'Yes, Create',  action: callbacks.onYes     || (() => {}), style: 'btn-primary' },
+      { label: 'Skip',         action: callbacks.onSkip    || (() => {}), style: 'btn-secondary' },
+      { label: 'Skip Species', action: callbacks.onSkipAll || (() => {}), style: 'btn-ghost' },
     ], 0);
   }
 
@@ -410,6 +419,7 @@ const UI = (() => {
     loading,
     clusterToast,
     addToStandToast,
+    scanClusterToast,
     offlineBanner,
     swUpdateToast,
     newSurveyModal,

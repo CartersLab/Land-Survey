@@ -12,6 +12,7 @@ const FormScreen = (() => {
   let _locSource       = 'gps';
   let _searchTimer     = null;
   let _searchAbort     = null;
+  let _selectedStandId = null;
 
   const CAT_DEFS = [
     { key: 'tree',             icon: '🌳', label: 'Tree' },
@@ -38,7 +39,7 @@ const FormScreen = (() => {
 
     // Reset state
     _editingObs = null; _selectedCat = null; _selectedSpecies = null; _photos = []; _tags = [];
-    _lat = null; _lng = null; _accuracy = null; _locSource = 'gps';
+    _lat = null; _lng = null; _accuracy = null; _locSource = 'gps'; _selectedStandId = null;
 
     if (_obsId) {
       _editingObs = await DB.get('observations', _obsId).catch(() => null);
@@ -51,6 +52,7 @@ const FormScreen = (() => {
       _accuracy  = _editingObs.accuracy  || null;
       _locSource = _editingObs.locationSource || 'saved';
       _selectedCat     = _editingObs.category || null;
+      _selectedStandId = _editingObs.standId  || null;
       _selectedSpecies = _editingObs.gbifKey
         ? { gbifKey: _editingObs.gbifKey, scientificName: _editingObs.scientificName, commonName: _editingObs.commonName }
         : null;
@@ -93,6 +95,7 @@ const FormScreen = (() => {
       _sectionLocation() +
       _sectionCategory() +
       _sectionSpecies() +
+      `<div id="cluster-section"></div>` +
       _sectionCore() +
       `<div id="cat-extra"></div>` +
       _sectionTags() +
@@ -101,6 +104,7 @@ const FormScreen = (() => {
     _bindBodyEvents();
     if (_selectedCat) { _highlightCat(_selectedCat); _renderCatExtra(_selectedCat); }
     if (_editingObs)  _populateEditing();
+    _loadAndRenderClusterSelector(); // async, fire-and-forget
   }
 
   function _sectionLocation() {
@@ -515,6 +519,52 @@ const FormScreen = (() => {
     });
   }
 
+  // ── Cluster selector ──────────────────────────────────────────────────────
+
+  async function _loadAndRenderClusterSelector() {
+    const sec = document.getElementById('cluster-section');
+    if (!sec || !_surveyId) return;
+
+    if (!_selectedSpecies?.gbifKey || !Clusters.PLANT_CATS.has(_selectedCat)) {
+      sec.innerHTML = '';
+      return;
+    }
+
+    let stands = [];
+    try { stands = await DB.getAllByIndex('stands', 'surveyId', _surveyId); } catch {}
+
+    if (!stands.length) { sec.innerHTML = ''; return; }
+
+    const gbifKey     = _selectedSpecies.gbifKey;
+    const sameSpecies = stands.filter(s => s.primaryGbifKey === gbifKey);
+    const others      = stands.filter(s => s.primaryGbifKey !== gbifKey);
+
+    let optHtml = `<option value="">— No Cluster —</option>`;
+    for (const s of sameSpecies) {
+      const n = s.name || s.primarySpeciesName || 'Cluster';
+      optHtml += `<option value="${s.id}"${_selectedStandId === s.id ? ' selected' : ''}>${escapeHtml(n)}</option>`;
+    }
+    if (others.length) {
+      if (sameSpecies.length) optHtml += `<option disabled>──────────</option>`;
+      for (const s of others) {
+        const n = s.name || s.primarySpeciesName || 'Cluster';
+        optHtml += `<option value="${s.id}"${_selectedStandId === s.id ? ' selected' : ''}>${escapeHtml(n)}</option>`;
+      }
+    }
+
+    sec.innerHTML = `
+      <div class="sheet-section">
+        <div class="sheet-section-title">Cluster (optional)</div>
+        <div class="form-group">
+          <select id="obs-cluster">${optHtml}</select>
+        </div>
+      </div>`;
+
+    sec.querySelector('#obs-cluster')?.addEventListener('change', e => {
+      _selectedStandId = e.target.value || null;
+    });
+  }
+
   // ── Species search ────────────────────────────────────────────────────────
 
   async function _runSearch(query) {
@@ -587,6 +637,9 @@ const FormScreen = (() => {
       inatId:         null,
       family:         null,
     };
+    _selectedStandId = null;
+    const clusterSec = document.getElementById('cluster-section');
+    if (clusterSec) clusterSec.innerHTML = '';
     const sec = document.getElementById('species-section');
     if (sec) {
       sec.innerHTML = `
@@ -638,9 +691,13 @@ const FormScreen = (() => {
         </div>`;
       document.getElementById('sp-clear')?.addEventListener('click', () => {
         _selectedSpecies = null;
+        _selectedStandId = null;
         _rebuildSpeciesSection();
+        const clusterSec = document.getElementById('cluster-section');
+        if (clusterSec) clusterSec.innerHTML = '';
       });
     }
+    _loadAndRenderClusterSelector();
   }
 
   // ── Photos ────────────────────────────────────────────────────────────────
@@ -706,7 +763,8 @@ const FormScreen = (() => {
 
     const heightFt = getNum('obs-height');
 
-    const taxFields = _selectedSpecies ? Species.toObservationFields(_selectedSpecies) : {};
+    const taxFields    = _selectedSpecies ? Species.toObservationFields(_selectedSpecies) : {};
+    const clusterSelId = document.getElementById('obs-cluster')?.value || _selectedStandId || null;
 
     const obs = {
       ...(_editingObs || {}),
@@ -732,6 +790,7 @@ const FormScreen = (() => {
       sex:            getVal('obs-sex')         || null,
       tags:           [..._tags],
       photos:         _photos,
+      standId:        clusterSelId,
       observedAt:     _editingObs?.observedAt || now(),
       updatedAt:      now(),
       ...taxFields,
@@ -751,7 +810,10 @@ const FormScreen = (() => {
       UI.toastSuccess(wasEditing ? 'Observation updated' : 'Observation saved');
       Router.navigate('map', { surveyId: surveyIdSnap });
 
-      if (!wasEditing) {
+      if (clusterSelId) {
+        // Update the cluster's member list and polygon geometry
+        Clusters.refreshStand(surveyIdSnap, clusterSelId).catch(() => {});
+      } else if (!wasEditing) {
         Clusters.checkForClusters(surveyIdSnap, obs).catch(() => {});
       }
     } catch (err) {
@@ -771,7 +833,7 @@ const FormScreen = (() => {
     clearTimeout(_searchTimer);
     if (_searchAbort) _searchAbort.abort();
     _surveyId = null; _obsId = null; _editingObs = null;
-    _selectedCat = null; _selectedSpecies = null; _photos = []; _tags = [];
+    _selectedCat = null; _selectedSpecies = null; _selectedStandId = null; _photos = []; _tags = [];
   }
 
   return { render, destroy };

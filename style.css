@@ -527,6 +527,139 @@ p { line-height: 1.5; }
   font-weight: 600;
 }
 
+/* ── Layer panel tabs ────────────────────────────────────────────────────── */
+
+.map-layer-panel {
+  min-width: 220px;
+}
+
+.layer-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-light);
+  margin: -2px -2px 8px;
+}
+
+.layer-tab {
+  flex: 1;
+  padding: 7px 2px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.layer-tab.active {
+  color: var(--green-primary);
+  border-bottom-color: var(--green-primary);
+}
+
+.layer-tab-pane { display: none; }
+.layer-tab-pane.active { display: block; }
+
+/* ── Cluster scan settings ───────────────────────────────────────────────── */
+
+.scan-settings { font-size: 0.85rem; }
+
+.scan-range-group { margin-bottom: 10px; }
+
+.scan-range-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.scan-range-val {
+  font-weight: 700;
+  color: var(--green-primary);
+}
+
+.scan-settings input[type="range"] {
+  width: 100%;
+  accent-color: var(--green-primary);
+}
+
+.scan-count-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.scan-count-row label { flex: 1; margin: 0; }
+
+.scan-count-row input[type="number"] {
+  width: 55px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.scan-rules-section { margin-bottom: 2px; }
+
+.scan-rules-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.scan-no-rules {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.scan-rule-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border-light);
+  font-size: 0.8rem;
+}
+
+.rule-species-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.rule-detail {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.rule-del {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--danger, #c0392b);
+  font-size: 1rem;
+  padding: 0 2px;
+  line-height: 1;
+}
+
 .map-add-btn {
   position: absolute;
   bottom: 80px;

@@ -77,9 +77,9 @@ const Markers = (() => {
     const poly = L.polygon(coords, {
       color,
       fillColor:   color,
-      fillOpacity: 0.18,
-      weight:      2.5,
-      dashArray:   '6 4',
+      fillOpacity: 0.22,
+      weight:      2,
+      opacity:     0.8,
     });
     poly.standId = stand.id;
     poly.bindPopup(() => buildStandPopup(stand), { maxWidth: 280 });
@@ -120,24 +120,25 @@ const Markers = (() => {
   }
 
   function buildStandPopup(stand) {
-    const color    = colorForCat(stand.category);
-    const catLabel = CAT_LABELS[stand.category] || stand.category;
-    const acres    = stand.areaM2 ? m2ToAcres(stand.areaM2) + ' ac' : null;
+    const color       = colorForCat(stand.category);
+    const catLabel    = CAT_LABELS[stand.category] || stand.category;
+    const displayName = stand.name || stand.primarySpeciesName || 'Cluster';
+    const acres       = stand.areaM2 ? m2ToAcres(stand.areaM2) + ' ac' : null;
 
     return `
       <div class="popup-header">
-        <div class="popup-common">${escapeHtml(stand.primarySpeciesName || 'Stand')}</div>
+        <div class="popup-common">${escapeHtml(displayName)}</div>
         ${stand.primarySpeciesScientific
           ? `<div class="popup-scientific">${escapeHtml(stand.primarySpeciesScientific)}</div>` : ''}
       </div>
       <div class="popup-badges">
-        <span class="badge badge-cat" style="background:${color}">${catLabel} Stand</span>
+        <span class="badge badge-cat" style="background:${color}">${catLabel} Cluster</span>
       </div>
       ${acres ? `<div class="popup-detail stand-popup"><span class="popup-area">${acres}</span></div>` : ''}
       ${stand.obsCount ? `<div class="popup-detail">${stand.obsCount} observations</div>` : ''}
       ${stand.notes ? `<div class="popup-notes">"${escapeHtml(stand.notes)}"</div>` : ''}
       <div class="popup-actions">
-        <button class="btn btn-sm btn-secondary" onclick="window._editStand('${stand.id}')">Edit Stand</button>
+        <button class="btn btn-sm btn-secondary" onclick="window._renameCluster('${stand.id}')">Rename</button>
       </div>`;
   }
 
