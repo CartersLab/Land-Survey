@@ -56,7 +56,9 @@ const HtmlExporter = (() => {
 
     // Prepare stand data
     const standData = stands.map(s => {
-      let polygon = (s.polygon || s.hullCoordinates || []).slice();
+      let polygon = (s.polygon || s.hullCoordinates || []).map(p =>
+        Array.isArray(p) ? [p[0], p[1]] : [p.lat, p.lng]
+      );
       if (obscure && polygon.length) {
         polygon = polygon.map(([lat, lng]) => jitterCoordinate(lat, lng, obscureMaxM, s.id + exportSeed));
       }
@@ -206,7 +208,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-siz
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
-const DATA = ${dataJson};
+const DATA = ${dataJson.replace(/<\/script>/gi, '<\\/script>')};
 </script>
 <script>
 (function(){
@@ -228,26 +230,41 @@ const DATA = ${dataJson};
   function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function fmtDate(iso){ try{ return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }catch(e){ return ''; } }
 
-  // ── Map
-  var map = L.map('map',{ center: D.center, zoom: 15, zoomControl: true, attributionControl: true });
-  if(!meta.hideScale) L.control.scale({imperial:true,metric:true}).addTo(map);
-  L.tileLayer(D.tileUrl,{ attribution: D.tileAttr, maxZoom: 19 }).addTo(map);
+  // ── Map init — guarded: Leaflet CDN may not load when file is opened offline
+  var mapOk = typeof L !== 'undefined';
+  var map = null, markerLayer = null, standLayer = null, markerMap = {};
 
-  var markerLayer = (typeof L.markerClusterGroup === 'function')
-    ? L.markerClusterGroup({ maxClusterRadius:40, disableClusteringAtZoom:17, showCoverageOnHover:false,
-        iconCreateFunction: function(cl){
-          return L.divIcon({ html:'<div style="background:#2d5a1b;color:#fff;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.82rem;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">'+cl.getChildCount()+'</div>', className:'', iconSize:[34,34], iconAnchor:[17,17] });
-        }})
-    : L.layerGroup();
-  map.addLayer(markerLayer);
-  var standLayer = L.layerGroup().addTo(map);
+  if(mapOk){
+    try{
+      map = L.map('map',{ center: D.center, zoom: 15, zoomControl: true, attributionControl: true });
+      if(!meta.hideScale) L.control.scale({imperial:true,metric:true}).addTo(map);
+      L.tileLayer(D.tileUrl,{ attribution: D.tileAttr, maxZoom: 19 }).addTo(map);
+      markerLayer = (typeof L.markerClusterGroup === 'function')
+        ? L.markerClusterGroup({ maxClusterRadius:40, disableClusteringAtZoom:17, showCoverageOnHover:false,
+            iconCreateFunction: function(cl){
+              return L.divIcon({ html:'<div style="background:#2d5a1b;color:#fff;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.82rem;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">'+cl.getChildCount()+'</div>', className:'', iconSize:[34,34], iconAnchor:[17,17] });
+            }})
+        : L.layerGroup();
+      map.addLayer(markerLayer);
+      standLayer = L.layerGroup().addTo(map);
+    } catch(e){
+      mapOk = false;
+      console.error('[Report] Map init failed:', e);
+    }
+  }
+  if(!mapOk){
+    document.getElementById('map').innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:10px;color:#888;font-size:.9rem;text-align:center;padding:20px">' +
+      '<div style="font-size:2.5rem">🗺</div>' +
+      '<div><strong>Map requires an internet connection.</strong><br>Open this file while online to load the interactive map.<br>The species list below is fully available offline.</div>' +
+      '</div>';
+  }
 
   // ── Filter state
   var usedCats = [];
   (function(){ var s={}; obs.forEach(function(o){ if(o.category && !s[o.category]){ s[o.category]=1; usedCats.push(o.category); }}); })();
   var activeCats = {}; usedCats.forEach(function(c){ activeCats[c]=true; });
   var activeLife = '', searchTerm = '', activeId = null;
-  var markerMap = {};
 
   function visible(o){
     if(!activeCats[o.category]) return false;
@@ -295,8 +312,9 @@ const DATA = ${dataJson};
     return h;
   }
 
-  // ── Render markers
+  // ── Render markers (no-op when map unavailable)
   function renderMarkers(){
+    if(!markerLayer) return;
     markerLayer.clearLayers();
     markerMap = {};
     obs.forEach(function(o){
@@ -311,8 +329,9 @@ const DATA = ${dataJson};
     });
   }
 
-  // ── Render stands
+  // ── Render stands (no-op when map unavailable)
   function renderStands(){
+    if(!standLayer) return;
     standLayer.clearLayers();
     stands.forEach(function(s){
       if(!s.polygon||s.polygon.length<3) return;
@@ -324,7 +343,7 @@ const DATA = ${dataJson};
     });
   }
 
-  // ── Sidebar helpers
+  // ── Sidebar helpers — always run regardless of map state
   function renderHeader(){
     document.getElementById('hdr-name').textContent = survey.name;
     var parts = [];
@@ -426,6 +445,7 @@ const DATA = ${dataJson};
 
   function flyTo(id){
     highlightRow(id);
+    if(!map) return;
     var o = obs.find(function(o){ return o.id===id; });
     if(!o||!o.lat) return;
     map.flyTo([o.lat,o.lng], Math.max(map.getZoom(),17), {duration:0.8});
@@ -472,16 +492,20 @@ const DATA = ${dataJson};
   }
 
   // ── Fit map to data
-  var pts = obs.filter(function(o){return o.lat&&o.lng;}).map(function(o){return[o.lat,o.lng];});
-  if(pts.length) try{ map.fitBounds(L.latLngBounds(pts),{padding:[40,40],maxZoom:17}); }catch(e){}
+  if(map){
+    var pts = obs.filter(function(o){return o.lat&&o.lng;}).map(function(o){return[o.lat,o.lng];});
+    if(pts.length) try{ map.fitBounds(L.latLngBounds(pts),{padding:[40,40],maxZoom:17}); }catch(e){}
+  }
 
-  // ── Boot
+  // ── Boot — sidebar always renders, map renders only when available
   renderHeader();
   renderCatChips();
   renderStands();
   refreshAll();
-  setTimeout(function(){ map.invalidateSize(); }, 150);
-  setTimeout(function(){ map.invalidateSize(); }, 600);
+  if(map){
+    setTimeout(function(){ map.invalidateSize(); }, 150);
+    setTimeout(function(){ map.invalidateSize(); }, 600);
+  }
 })();
 </script>
 </body>
