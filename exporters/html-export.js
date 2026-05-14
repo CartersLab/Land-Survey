@@ -111,11 +111,12 @@ const HtmlExporter = (() => {
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;color:#1a1a1a;height:100vh;overflow:hidden;display:flex;flex-direction:column;background:#f5f0e8}
-#app{display:flex;flex:1;overflow:hidden;height:100%}
-#map-wrap{flex:0 0 60%;height:100%;position:relative;z-index:1}
-#map{width:100%;height:100%;background:#e8e4dd}
-#sidebar{flex:0 0 40%;height:100%;display:flex;flex-direction:column;background:#f5f0e8;border-left:1px solid #d0c8b8;overflow:hidden}
+#app{display:flex;flex:1;overflow:hidden;min-height:0}
+#map-wrap{flex:0 0 60%;position:relative;z-index:1;min-height:0}
+#map{position:absolute;top:0;left:0;right:0;bottom:0;background:#e8e4dd}
+#sidebar{flex:0 0 40%;display:flex;flex-direction:column;background:#f5f0e8;border-left:1px solid #d0c8b8;overflow:hidden;min-height:0}
 #sidebar-header{background:#2d5a1b;color:#fff;padding:14px 16px;flex-shrink:0}
 #sidebar-header h1{font-size:1.05rem;font-weight:700;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #sidebar-header .meta{font-size:.76rem;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -480,6 +481,7 @@ const DATA = ${dataJson};
   renderStands();
   refreshAll();
   setTimeout(function(){ map.invalidateSize(); }, 150);
+  setTimeout(function(){ map.invalidateSize(); }, 600);
 })();
 </script>
 </body>
