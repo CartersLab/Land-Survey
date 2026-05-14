@@ -39,13 +39,6 @@ const CONFIG = {
       maxZoom: 19,
       subdomains: 'abcd',
     },
-    maptiler: {
-      name: 'Satellite (No Labels)',
-      url: 'https://api.maptiler.com/maps/hybrid/{z}/{x}/{y}.jpg?key={key}',
-      key: 'YOUR_MAPTILER_KEY_HERE',
-      attribution: '© MapTiler © OpenStreetMap contributors',
-      maxZoom: 19,
-    },
   },
   GBIF: {
     SUGGEST_URL: 'https://api.gbif.org/v1/species/suggest',
@@ -68,7 +61,7 @@ const CONFIG = {
   },
   APP: {
     VERSION: '1.1.0',
-    BUILD:   '2026-05-14 09:51',
+    BUILD:   '2026-05-14 10:05',
     DEFAULT_SURVEYOR: '',
     DEFAULT_COUNTY: 'Livingston',
     DEFAULT_TOWNSHIP: 'Tyrone',
