@@ -746,11 +746,13 @@ const FormScreen = (() => {
       const survey = await DB.get('surveys', _surveyId).catch(() => null);
       if (survey) { survey.updatedAt = now(); await DB.put('surveys', survey); }
 
-      UI.toastSuccess(_editingObs ? 'Observation updated' : 'Observation saved');
-      Router.navigate('map', { surveyId: _surveyId });
+      const surveyIdSnap = _surveyId;
+      const wasEditing   = !!_editingObs;
+      UI.toastSuccess(wasEditing ? 'Observation updated' : 'Observation saved');
+      Router.navigate('map', { surveyId: surveyIdSnap });
 
-      if (!_editingObs) {
-        Clusters.checkForClusters(_surveyId, obs).catch(() => {});
+      if (!wasEditing) {
+        Clusters.checkForClusters(surveyIdSnap, obs).catch(() => {});
       }
     } catch (err) {
       console.error('[FormScreen] save error:', err);

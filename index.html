@@ -82,6 +82,19 @@
           });
         });
       }).catch(err => console.warn('SW registration failed:', err));
+
+      // When new SW takes control, reload on safe screens; toast on others
+      let _reloading = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (_reloading) return;
+        _reloading = true;
+        const screen = (typeof State !== 'undefined') ? State.get('currentScreen') : null;
+        if (!screen || screen === 'home') {
+          location.reload();
+        } else {
+          UI.swUpdateToast();
+        }
+      });
     }
 
     async function boot() {

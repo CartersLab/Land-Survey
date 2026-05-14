@@ -16,7 +16,7 @@
  *   Everything else → network-first, cache fallback
  */
 
-const SHELL_CACHE  = 'field-survey-shell-v18';
+const SHELL_CACHE  = 'field-survey-shell-v19';
 const TILE_CACHE   = 'field-survey-tiles-v1';
 const DB_NAME      = 'FieldSurveyDB';
 const TILE_STORE   = 'tileBitmaps';
