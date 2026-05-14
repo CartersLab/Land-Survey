@@ -51,7 +51,8 @@ const CONFIG = {
     STORES: ['surveys', 'observations', 'stands', 'speciesCache', 'tileRegions', 'exportSettings'],
   },
   APP: {
-    VERSION: '1.0.0',
+    VERSION: '1.1.0',
+    BUILD:   '2026-05-14 08:00',
     DEFAULT_SURVEYOR: '',
     DEFAULT_COUNTY: 'Livingston',
     DEFAULT_TOWNSHIP: 'Tyrone',

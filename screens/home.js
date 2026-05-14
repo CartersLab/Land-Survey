@@ -20,7 +20,7 @@ const HomeScreen = (() => {
         <div class="home-header">
           <div class="home-header-left">
             <h1>Field Survey</h1>
-            <div class="version">v${CONFIG.APP.VERSION}</div>
+            <div class="version">v${CONFIG.APP.VERSION} · ${CONFIG.APP.BUILD}</div>
           </div>
           <div id="home-status"></div>
           <button class="btn-icon" id="home-settings-btn" title="App settings" aria-label="App settings">
