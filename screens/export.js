@@ -164,7 +164,7 @@ const ExportScreen = (() => {
           <div class="settings-row" style="padding:8px 0;border-bottom:1px solid var(--border)">
             <div class="settings-row-label">
               <h4 style="margin:0;font-size:.9rem">Obscure Location</h4>
-              <p style="margin:2px 0 0;font-size:.78rem;color:var(--text-muted)">Terrain tiles (no labels), only loads tiles near observations</p>
+              <p style="margin:2px 0 0;font-size:.78rem;color:var(--text-muted)">Roads &amp; water, no labels — only tiles near observations load</p>
             </div>
             <label class="toggle-switch">
               <input type="checkbox" id="rpt-obscure" ${S.obscureLocation ? 'checked' : ''}>

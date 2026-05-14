@@ -8,8 +8,8 @@ const HtmlExporter = (() => {
     return [x, y];
   }
 
-  const OBSCURE_ZOOM   = 15; // tile layer is locked to this zoom
-  const OBSCURE_BUFFER = 1;  // ±1 tile in each direction around each observation
+  const OBSCURE_ZOOM   = 16; // tile layer is locked to this zoom (z16 renders smaller water features)
+  const OBSCURE_BUFFER = 2;  // ±2 tiles around each observation (~3km coverage, same as z15 ±1)
 
   function _buildAllowedTiles(observations) {
     const keys = new Set();
@@ -35,7 +35,7 @@ const HtmlExporter = (() => {
 
     const S = exportSettingsRaw?.htmlExport || {};
     const obscure     = S.obscureLocation ?? false;
-    const baseLayer   = obscure ? 'stadia' : (S.baseLayer || 'osm');
+    const baseLayer   = obscure ? 'cartoVoyager' : (S.baseLayer || 'osm');
     const stripCoords = obscure && (S.stripCoordinatesFromPopups ?? true);
     const showDl      = S.showDownloadButtons ?? true;
     const tp          = CONFIG.TILE_PROVIDERS[baseLayer] || CONFIG.TILE_PROVIDERS.osm;

@@ -25,11 +25,12 @@ const CONFIG = {
       maxZoom: 19,
       subdomains: 'abc',
     },
-    stadia: {
-      name: 'Terrain (No Labels)',
-      url: 'https://tiles.stadiamaps.com/tiles/stamen_terrain_background/{z}/{x}/{y}.png',
-      attribution: '© Stadia Maps © Stamen Design © OpenStreetMap contributors',
-      maxZoom: 18,
+    cartoLight: {
+      name: 'Light (No Labels)',
+      url: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png',
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
+      maxZoom: 19,
+      subdomains: 'abcd',
     },
     maptiler: {
       name: 'Satellite (No Labels)',
@@ -60,7 +61,7 @@ const CONFIG = {
   },
   APP: {
     VERSION: '1.1.0',
-    BUILD:   '2026-05-14 09:38',
+    BUILD:   '2026-05-14 09:47',
     DEFAULT_SURVEYOR: '',
     DEFAULT_COUNTY: 'Livingston',
     DEFAULT_TOWNSHIP: 'Tyrone',
