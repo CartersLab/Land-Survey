@@ -16,7 +16,7 @@
  *   Everything else → network-first, cache fallback
  */
 
-const SHELL_CACHE  = 'field-survey-shell-v10';
+const SHELL_CACHE  = 'field-survey-shell-v11';
 const TILE_CACHE   = 'field-survey-tiles-v1';
 const DB_NAME      = 'FieldSurveyDB';
 const TILE_STORE   = 'tileBitmaps';
@@ -119,12 +119,18 @@ function tileKeyFromUrl(url) {
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(SHELL_CACHE).then(cache =>
-      cache.addAll(SHELL_FILES).catch(err => {
-        // Don't fail install if some optional files are missing yet
-        console.warn('[SW] Some shell files missing during install:', err.message);
-      })
-    ).then(() => self.skipWaiting())
+    caches.open(SHELL_CACHE).then(async cache => {
+      // cache: 'reload' bypasses the HTTP cache so CDN propagation delays
+      // don't cause the SW to install stale versions of app files.
+      const results = await Promise.allSettled(
+        SHELL_FILES.map(url =>
+          fetch(url, { cache: 'reload' })
+            .then(res => { if (res.ok) cache.put(url, res); })
+        )
+      );
+      const failed = results.filter(r => r.status === 'rejected');
+      if (failed.length) console.warn('[SW] Some shell files failed during install:', failed.length);
+    }).then(() => self.skipWaiting())
   );
 });
 
