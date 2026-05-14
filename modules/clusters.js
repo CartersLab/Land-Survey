@@ -12,12 +12,41 @@ const Clusters = (() => {
   async function checkForClusters(surveyId, newObs) {
     if (!newObs.gbifKey) return;
     if (!PLANT_CATS.has(newObs.category)) return;
-    if (newObs.standId) return; // already assigned to a cluster
+    if (newObs.standId) return;
     if (!newObs.lat || !newObs.lng) return;
 
     try {
-      const allObs = await DB.getAllByIndex('observations', 'surveyId', surveyId);
+      // Use the same range/count the user configured in scan settings so
+      // real-time detection and manual scan behave identically.
+      let rangeM   = RADIUS_M;
+      let minCount = MIN_COUNT;
+      try {
+        const saved = await DB.getRaw('appSettings', 'clusterScanSettings');
+        if (saved) {
+          const rule = saved.perSpecies?.find(r => r.gbifKey === newObs.gbifKey);
+          rangeM   = rule?.rangeM   ?? saved.rangeM   ?? rangeM;
+          minCount = rule?.minCount ?? saved.minCount ?? minCount;
+        }
+      } catch {}
 
+      const [allObs, stands] = await Promise.all([
+        DB.getAllByIndex('observations', 'surveyId', surveyId),
+        DB.getAllByIndex('stands',       'surveyId', surveyId),
+      ]);
+
+      // Check if the new obs is within range of an existing same-species cluster
+      const nearbyStand = stands.find(s => {
+        if (s.primaryGbifKey !== newObs.gbifKey) return false;
+        const members = allObs.filter(o => o.standId === s.id && o.lat && o.lng);
+        return members.some(m => distanceMeters(newObs.lat, newObs.lng, m.lat, m.lng) <= rangeM);
+      });
+
+      if (nearbyStand) {
+        _promptAddToStand(surveyId, newObs, nearbyStand);
+        return;
+      }
+
+      // Check if enough ungrouped same-species obs are nearby to form a new cluster
       const sameSpeciesUngrouped = allObs.filter(o =>
         o.id !== newObs.id &&
         o.gbifKey === newObs.gbifKey &&
@@ -25,24 +54,16 @@ const Clusters = (() => {
         !o.standId
       );
 
-      if (sameSpeciesUngrouped.length < MIN_COUNT - 1) return;
+      if (sameSpeciesUngrouped.length < minCount - 1) return;
 
       const nearby = sameSpeciesUngrouped.filter(o =>
-        distanceMeters(newObs.lat, newObs.lng, o.lat, o.lng) <= RADIUS_M * CONFIG.MAP.CLUSTER_NEARBY_MULTIPLIER
+        distanceMeters(newObs.lat, newObs.lng, o.lat, o.lng) <= rangeM
       );
 
-      if (nearby.length + 1 < MIN_COUNT) return;
+      if (nearby.length + 1 < minCount) return;
 
       const clusterKey = _clusterKey(newObs.gbifKey, newObs.lat, newObs.lng);
       if (State.get('dismissedClusterKeys').has(clusterKey)) return;
-
-      const stands = await DB.getAllByIndex('stands', 'surveyId', surveyId);
-      const existingStand = stands.find(s => s.primaryGbifKey === newObs.gbifKey);
-
-      if (existingStand) {
-        _promptAddToStand(surveyId, newObs, existingStand);
-        return;
-      }
 
       const maxDist  = Math.max(...nearby.map(o => distanceMeters(newObs.lat, newObs.lng, o.lat, o.lng)));
       const specName = newObs.commonName || newObs.scientificName || 'this species';
