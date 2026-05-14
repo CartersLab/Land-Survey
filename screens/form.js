@@ -807,14 +807,18 @@ const FormScreen = (() => {
 
       const surveyIdSnap = _surveyId;
       const wasEditing   = !!_editingObs;
+      const oldStandId   = _editingObs?.standId || null;
       UI.toastSuccess(wasEditing ? 'Observation updated' : 'Observation saved');
       Router.navigate('map', { surveyId: surveyIdSnap });
 
       if (clusterSelId) {
-        // Update the cluster's member list and polygon geometry
         Clusters.refreshStand(surveyIdSnap, clusterSelId).catch(() => {});
       } else if (!wasEditing) {
         Clusters.checkForClusters(surveyIdSnap, obs).catch(() => {});
+      }
+      // Refresh the old cluster if the obs was moved out of it
+      if (wasEditing && oldStandId && oldStandId !== clusterSelId) {
+        Clusters.refreshStand(surveyIdSnap, oldStandId).catch(() => {});
       }
     } catch (err) {
       console.error('[FormScreen] save error:', err);

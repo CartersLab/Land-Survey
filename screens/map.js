@@ -53,9 +53,10 @@ const MapScreen = (() => {
       _loadMarkers();
 
       window._refreshMapMarkers = () => _loadMarkers();
-      window._editObs    = _handleEditObs;
-      window._deleteObs  = _handleDeleteObs;
-      window._renameCluster = _handleRenameCluster;
+      window._editObs       = _handleEditObs;
+      window._deleteObs     = _handleDeleteObs;
+      window._editCluster   = _handleEditCluster;
+      window._deleteCluster = _handleDeleteCluster;
     } catch (err) {
       console.error('[MapScreen] init failed:', err);
       container.innerHTML = `
@@ -572,40 +573,79 @@ const MapScreen = (() => {
     if (_scanHighlight) _scanHighlight.clearLayers();
   }
 
-  // ── Cluster rename ────────────────────────────────────────────────────────
+  // ── Cluster edit ──────────────────────────────────────────────────────────
 
-  async function _handleRenameCluster(standId) {
+  async function _handleEditCluster(standId) {
     const stand = await DB.get('stands', standId).catch(() => null);
     if (!stand) return;
 
-    const currentName = stand.name || stand.primarySpeciesName || 'Cluster';
+    const currentName  = stand.name  || stand.primarySpeciesName || 'Cluster';
+    const currentNotes = stand.notes || '';
     const bodyEl = document.createElement('div');
     bodyEl.innerHTML = `
       <div class="form-group">
         <label>Cluster Name</label>
-        <input type="text" id="rename-cluster-input" value="${escapeHtml(currentName)}" autocomplete="off">
+        <input type="text" id="edit-cluster-name" value="${escapeHtml(currentName)}" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="edit-cluster-notes" rows="3" style="resize:vertical">${escapeHtml(currentNotes)}</textarea>
       </div>`;
 
     await new Promise(resolve => {
-      UI.modal('Rename Cluster', bodyEl, {
+      UI.modal('Edit Cluster', bodyEl, {
         buttons: [
           { label: 'Cancel', style: 'btn-secondary', action: () => resolve() },
           { label: 'Save',   style: 'btn-primary',   action: async () => {
-            const name = document.getElementById('rename-cluster-input')?.value?.trim();
+            const name = document.getElementById('edit-cluster-name')?.value?.trim();
             if (!name) return;
-            stand.name = name;
+            stand.name      = name;
+            stand.notes     = (document.getElementById('edit-cluster-notes')?.value || '').trim();
             stand.updatedAt = now();
             await DB.put('stands', stand);
+            _map?.closePopup();
             _loadMarkers();
             resolve();
           }},
         ],
       });
       setTimeout(() => {
-        const inp = document.getElementById('rename-cluster-input');
+        const inp = document.getElementById('edit-cluster-name');
         if (inp) { inp.focus(); inp.select(); }
       }, 80);
     });
+  }
+
+  // ── Cluster delete ────────────────────────────────────────────────────────
+
+  async function _handleDeleteCluster(standId) {
+    const stand = await DB.get('stands', standId).catch(() => null);
+    if (!stand) return;
+
+    const name = stand.name || stand.primarySpeciesName || 'Cluster';
+    const ok = await UI.confirm(
+      `Delete "${name}"? All member observations will be kept but removed from the cluster.`,
+      'Delete Cluster',
+      { confirmLabel: 'Delete', dangerous: true }
+    );
+    if (!ok) return;
+
+    try {
+      // Unassign all observations that belonged to this cluster
+      const allObs = await DB.getAllByIndex('observations', 'surveyId', _surveyId);
+      const members = allObs.filter(o => o.standId === standId);
+      await Promise.all(members.map(o => {
+        o.standId = null;
+        return DB.put('observations', o);
+      }));
+      await DB.delete('stands', standId);
+      _map?.closePopup();
+      _loadMarkers();
+      UI.toastSuccess(`"${name}" deleted`);
+    } catch (err) {
+      console.error('[MapScreen] deleteCluster:', err);
+      UI.toastError('Failed to delete cluster');
+    }
   }
 
   // ── Load markers ──────────────────────────────────────────────────────────
@@ -778,7 +818,8 @@ const MapScreen = (() => {
     window._refreshMapMarkers = null;
     window._editObs           = null;
     window._deleteObs         = null;
-    window._renameCluster     = null;
+    window._editCluster       = null;
+    window._deleteCluster     = null;
     if (_map) { _map.remove(); _map = null; }
     _markerLayer  = null;
     _standLayer   = null;

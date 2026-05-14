@@ -138,7 +138,8 @@ const Markers = (() => {
       ${stand.obsCount ? `<div class="popup-detail">${stand.obsCount} observations</div>` : ''}
       ${stand.notes ? `<div class="popup-notes">"${escapeHtml(stand.notes)}"</div>` : ''}
       <div class="popup-actions">
-        <button class="btn btn-sm btn-secondary" onclick="window._renameCluster('${stand.id}')">Rename</button>
+        <button class="btn btn-sm btn-secondary" onclick="window._editCluster('${stand.id}')">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="window._deleteCluster('${stand.id}')">Delete</button>
       </div>`;
   }
 
