@@ -3,7 +3,7 @@ const CONFIG = {
     DEFAULT_CENTER: [42.82, -83.78],
     DEFAULT_ZOOM: 15,
     MIN_ZOOM: 10,
-    MAX_ZOOM: 19,
+    MAX_ZOOM: 23,
     CACHE_MIN_ZOOM: 14,
     CACHE_MAX_ZOOM: 18,
     CLUSTER_RADIUS_METERS: 20,
@@ -61,7 +61,7 @@ const CONFIG = {
   },
   APP: {
     VERSION: '1.3.0',
-    BUILD:   '2026-05-14 14:04',
+    BUILD:   '2026-05-14 14:08',
     DEFAULT_SURVEYOR: '',
     DEFAULT_COUNTY: 'Livingston',
     DEFAULT_TOWNSHIP: 'Tyrone',

@@ -5,10 +5,12 @@ const Tiles = (() => {
     if (!p) throw new Error(`Unknown tile provider: ${providerKey}`);
     let url = p.url;
     if (p.key && p.key !== 'YOUR_MAPTILER_KEY_HERE') url = url.replace('{key}', p.key);
+    const nativeMax = p.maxZoom || 19;
     return L.tileLayer(url, {
-      attribution: p.attribution,
-      maxZoom:     p.maxZoom || 19,
-      crossOrigin: true,
+      attribution:   p.attribution,
+      maxNativeZoom: nativeMax,
+      maxZoom:       CONFIG.MAP.MAX_ZOOM,
+      crossOrigin:   true,
     });
   }
 
