@@ -5,6 +5,7 @@ const FormScreen = (() => {
   let _selectedCat     = null;
   let _selectedSpecies = null;
   let _photos          = [];
+  let _tags            = [];
   let _lat             = null;
   let _lng             = null;
   let _accuracy        = null;
@@ -36,7 +37,7 @@ const FormScreen = (() => {
     _obsId    = params?.obsId    || null;
 
     // Reset state
-    _editingObs = null; _selectedCat = null; _selectedSpecies = null; _photos = [];
+    _editingObs = null; _selectedCat = null; _selectedSpecies = null; _photos = []; _tags = [];
     _lat = null; _lng = null; _accuracy = null; _locSource = 'gps';
 
     if (_obsId) {
@@ -94,6 +95,7 @@ const FormScreen = (() => {
       _sectionSpecies() +
       _sectionCore() +
       `<div id="cat-extra"></div>` +
+      _sectionTags() +
       _sectionRare() +
       _sectionPhotos();
     _bindBodyEvents();
@@ -185,16 +187,46 @@ const FormScreen = (() => {
       </div>`;
   }
 
+  const COVER_OPTS = ['<1%','1-5%','6-25%','26-50%','51-75%','76-100%'];
+  const LIFE_STAGE_OPTS = ['Seedling','Sapling','Mature','Overmature','Snag','Stump','Unknown'];
+  const CONDITION_OPTS  = ['Excellent','Good','Fair','Poor','Dead','Unknown'];
+  const SEX_OPTS        = ['Unknown','Male','Female','Juvenile','Mixed group'];
+  const PLANT_CATS      = ['tree','shrub','herbaceous','grass-sedge-rush','fern-moss-lichen','fungus','invasive'];
+  const ANIMAL_CATS     = ['bird','mammal','reptile','amphibian','fish','invertebrate'];
+
+  function _covSelect(val) {
+    return `<select id="obs-cov"><option value="">— select —</option>` +
+      COVER_OPTS.map(o => `<option value="${o}"${val===o?' selected':''}>${o === '<1%' ? '&lt;1%' : o}</option>`).join('') +
+      `</select>`;
+  }
+  function _lifeStageSelect(val) {
+    return `<select id="obs-life-stage">${_opts(LIFE_STAGE_OPTS, val)}</select>`;
+  }
+  function _conditionSelect(val) {
+    return `<select id="obs-condition">${_opts(CONDITION_OPTS, val)}</select>`;
+  }
+  function _sexSelect(val) {
+    return `<select id="obs-sex">${_opts(SEX_OPTS, val)}</select>`;
+  }
+
   function _renderCatExtra(cat) {
     const el = document.getElementById('cat-extra');
     if (!el) return;
     const obs = _editingObs || {};
-    const heightFt = obs.heightM ? (obs.heightM * 3.28084).toFixed(1) : '';
-    const dbh      = obs.dbhCm     || '';
-    const cov      = obs.coveragePct != null ? obs.coveragePct : '';
-    const beh      = obs.behavior   || '';
-    const dist     = obs.distanceM  || '';
-    const sign     = obs.signType   || '';
+    const heightFt  = obs.heightM ? (obs.heightM * 3.28084).toFixed(1) : '';
+    const dbh       = obs.dbhCm       || '';
+    const cov       = obs.coveragePct != null ? String(obs.coveragePct) : '';
+    const beh       = obs.behavior    || '';
+    const dist      = obs.distanceM   || '';
+    const sign      = obs.signType    || '';
+    const lifeStage = obs.lifeStage   || '';
+    const condition = obs.condition   || '';
+    const sex       = obs.sex         || '';
+
+    const plantExtra = `
+      <div class="form-group"><label>Life Stage</label>${_lifeStageSelect(lifeStage)}</div>
+      <div class="form-group"><label>Condition</label>${_conditionSelect(condition)}</div>`;
+    const sexRow = `<div class="form-group"><label>Sex</label>${_sexSelect(sex)}</div>`;
 
     let html = '';
 
@@ -206,15 +238,15 @@ const FormScreen = (() => {
             <input type="number" id="obs-height" value="${heightFt}" min="0" step="0.5" placeholder="optional"></div>
           ${cat === 'tree' ? `<div class="form-group"><label>DBH (cm)</label>
             <input type="number" id="obs-dbh" value="${dbh}" min="0" step="1" placeholder="optional"></div>` : ''}
-          <div class="form-group"><label>Coverage (%)</label>
-            <input type="number" id="obs-cov" value="${cov}" min="0" max="100" step="5" placeholder="0–100"></div>
+          <div class="form-group"><label>Cover Estimate</label>${_covSelect(cov)}</div>
+          ${plantExtra}
         </div>`;
-    } else if (['herbaceous','grass-sedge-rush','fern-moss-lichen','fungus'].includes(cat)) {
+    } else if (PLANT_CATS.includes(cat)) {
       html = `
         <div class="sheet-section">
           <div class="sheet-section-title">Plant Details</div>
-          <div class="form-group"><label>Coverage (%)</label>
-            <input type="number" id="obs-cov" value="${cov}" min="0" max="100" step="5" placeholder="0–100"></div>
+          <div class="form-group"><label>Cover Estimate</label>${_covSelect(cov)}</div>
+          ${plantExtra}
         </div>`;
     } else if (cat === 'bird') {
       const opts = ['Singing','Calling','Seen','Flying','Nest/Eggs','Carrying food','Distress call'];
@@ -225,6 +257,7 @@ const FormScreen = (() => {
             <select id="obs-beh">${_opts(opts, beh)}</select></div>
           <div class="form-group"><label>Distance (m)</label>
             <input type="number" id="obs-dist" value="${dist}" min="0" step="5" placeholder="e.g. 30"></div>
+          ${sexRow}
         </div>`;
     } else if (cat === 'mammal') {
       const opts = ['Seen','Heard','Tracks','Scat','Den','Burrow','Hair/Fur'];
@@ -233,6 +266,7 @@ const FormScreen = (() => {
           <div class="sheet-section-title">Mammal Details</div>
           <div class="form-group"><label>Detection Type</label>
             <select id="obs-beh">${_opts(opts, beh)}</select></div>
+          ${sexRow}
         </div>`;
     } else if (cat === 'reptile' || cat === 'amphibian') {
       const opts = ['Seen','Heard (call)','Basking','Breeding/Egg mass','Tadpoles/Larvae','Road mortality'];
@@ -241,6 +275,7 @@ const FormScreen = (() => {
           <div class="sheet-section-title">${cat === 'reptile' ? 'Reptile' : 'Amphibian'} Details</div>
           <div class="form-group"><label>Behavior</label>
             <select id="obs-beh">${_opts(opts, beh)}</select></div>
+          ${sexRow}
         </div>`;
     } else if (cat === 'fish') {
       const opts = ['Seen','Electrofishing','Angling','Net capture','Spawning activity'];
@@ -249,6 +284,7 @@ const FormScreen = (() => {
           <div class="sheet-section-title">Fish Details</div>
           <div class="form-group"><label>Detection</label>
             <select id="obs-beh">${_opts(opts, beh)}</select></div>
+          ${sexRow}
         </div>`;
     } else if (cat === 'invertebrate') {
       const opts = ['Adult seen','Larva/Caterpillar','Egg mass','Cocoon/Pupa','Feeding damage','Colony'];
@@ -257,6 +293,7 @@ const FormScreen = (() => {
           <div class="sheet-section-title">Invertebrate Details</div>
           <div class="form-group"><label>Behavior / Stage</label>
             <select id="obs-beh">${_opts(opts, beh)}</select></div>
+          ${sexRow}
         </div>`;
     } else if (cat === 'sign-evidence') {
       const opts = ['Tracks','Scat','Den/Burrow','Nest','Rub/Scrape','Browse damage','Trail/Run','Camera trap','Carcass','Other'];
@@ -274,6 +311,45 @@ const FormScreen = (() => {
   function _opts(arr, selected) {
     return `<option value="">— select —</option>` +
       arr.map(o => `<option value="${o}"${selected===o?' selected':''}>${o}</option>`).join('');
+  }
+
+  function _sectionTags() {
+    return `
+      <div class="sheet-section">
+        <div class="sheet-section-title">Tags</div>
+        <div class="tags-input-wrap">
+          <div class="tags-chips" id="tags-chips">${_tagsHtml()}</div>
+          <input type="text" id="tags-input" placeholder="Type tag, press Enter or comma…" autocomplete="off" autocorrect="off">
+        </div>
+      </div>`;
+  }
+
+  function _tagsHtml() {
+    return _tags.map((t, i) =>
+      `<span class="tag-chip">${escapeHtml(t)}<button class="tag-chip-remove" data-tidx="${i}">×</button></span>`
+    ).join('');
+  }
+
+  function _renderTagChips() {
+    const el = document.getElementById('tags-chips');
+    if (el) { el.innerHTML = _tagsHtml(); _bindTagRemove(); }
+  }
+
+  function _bindTagRemove() {
+    document.querySelectorAll('.tag-chip-remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        _tags.splice(Number(btn.dataset.tidx), 1);
+        _renderTagChips();
+      });
+    });
+  }
+
+  function _addTag(raw) {
+    const tag = raw.trim().replace(/,+$/, '').trim();
+    if (tag && !_tags.includes(tag)) {
+      _tags.push(tag);
+      _renderTagChips();
+    }
   }
 
   function _sectionRare() {
@@ -387,6 +463,20 @@ const FormScreen = (() => {
       _rebuildSpeciesSection();
     });
 
+    // Tags
+    document.getElementById('tags-input')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        const val = e.target.value;
+        _addTag(val);
+        e.target.value = '';
+      }
+    });
+    document.getElementById('tags-input')?.addEventListener('blur', e => {
+      if (e.target.value.trim()) { _addTag(e.target.value); e.target.value = ''; }
+    });
+    _bindTagRemove();
+
     // Photos
     document.getElementById('photo-cam')?.addEventListener('click', () => document.getElementById('photo-file-cam')?.click());
     document.getElementById('photo-gal')?.addEventListener('click', () => document.getElementById('photo-file-gal')?.click());
@@ -456,7 +546,9 @@ const FormScreen = (() => {
   function _showResults(results) {
     const el = document.getElementById('sp-results');
     if (!el) return;
-    if (!results.length) { el.style.display = 'none'; return; }
+
+    const catDef    = CAT_DEFS.find(c => c.key === _selectedCat);
+    const unknownLabel = `Unknown / Unidentified ${catDef?.label || 'Species'}`;
 
     el.style.display = 'block';
     el.innerHTML = results.map((r, i) => {
@@ -471,11 +563,45 @@ const FormScreen = (() => {
           ${sci ? `<div class="sp-scientific">${escapeHtml(sci)}</div>` : ''}
         </div>${tag}
       </div>`;
-    }).join('');
+    }).join('') +
+    `<div class="species-result-item species-unknown-item" data-unknown="true">
+      <div style="flex:1">
+        <div class="sp-common" style="color:var(--text-muted)">${escapeHtml(unknownLabel)}</div>
+        <div class="sp-scientific" style="font-style:italic;color:var(--text-muted)">No identification</div>
+      </div>
+    </div>`;
 
     el.querySelectorAll('[data-idx]').forEach(item => {
       item.addEventListener('click', () => _pickSpecies(results[Number(item.dataset.idx)]));
     });
+    el.querySelector('[data-unknown]')?.addEventListener('click', () => _pickUnknown());
+  }
+
+  function _pickUnknown() {
+    const catDef = CAT_DEFS.find(c => c.key === _selectedCat);
+    const label  = catDef?.label || 'Species';
+    _selectedSpecies = {
+      gbifKey:        null,
+      scientificName: `Unknown ${label}`,
+      commonName:     `Unknown / Unidentified ${label}`,
+      inatId:         null,
+      family:         null,
+    };
+    const sec = document.getElementById('species-section');
+    if (sec) {
+      sec.innerHTML = `
+        <div class="sheet-section-title">Species</div>
+        <div class="species-selected-display">
+          <div class="sp-info">
+            <div class="sp-common">${escapeHtml(_selectedSpecies.commonName)}</div>
+          </div>
+          <button class="sp-clear" id="sp-clear">×</button>
+        </div>`;
+      document.getElementById('sp-clear')?.addEventListener('click', () => {
+        _selectedSpecies = null;
+        _rebuildSpeciesSection();
+      });
+    }
   }
 
   async function _pickSpecies(r) {
@@ -551,10 +677,14 @@ const FormScreen = (() => {
     }
     if (obs.heightM) set('obs-height', (obs.heightM * 3.28084).toFixed(1));
     if (obs.dbhCm)   set('obs-dbh', obs.dbhCm);
-    if (obs.coveragePct != null) set('obs-cov', obs.coveragePct);
+    if (obs.coveragePct != null) set('obs-cov', String(obs.coveragePct));
     if (obs.behavior)  set('obs-beh', obs.behavior);
     if (obs.distanceM) set('obs-dist', obs.distanceM);
     if (obs.signType)  set('obs-sign', obs.signType);
+    if (obs.lifeStage) set('obs-life-stage', obs.lifeStage);
+    if (obs.condition) set('obs-condition', obs.condition);
+    if (obs.sex)       set('obs-sex', obs.sex);
+    if (obs.tags?.length) { _tags = [...obs.tags]; _renderTagChips(); }
   }
 
   // ── Save ──────────────────────────────────────────────────────────────────
@@ -593,10 +723,14 @@ const FormScreen = (() => {
       rareNotes:      (getVal('obs-rare-notes') || '').trim(),
       heightM:        heightFt != null ? heightFt / 3.28084 : null,
       dbhCm:          getNum('obs-dbh'),
-      coveragePct:    getNum('obs-cov'),
+      coveragePct:    getVal('obs-cov') || null,
       behavior:       getVal('obs-beh') || null,
       distanceM:      getNum('obs-dist'),
       signType:       getVal('obs-sign') || null,
+      lifeStage:      getVal('obs-life-stage') || null,
+      condition:      getVal('obs-condition')  || null,
+      sex:            getVal('obs-sex')         || null,
+      tags:           [..._tags],
       photos:         _photos,
       observedAt:     _editingObs?.observedAt || now(),
       updatedAt:      now(),
@@ -635,7 +769,7 @@ const FormScreen = (() => {
     clearTimeout(_searchTimer);
     if (_searchAbort) _searchAbort.abort();
     _surveyId = null; _obsId = null; _editingObs = null;
-    _selectedCat = null; _selectedSpecies = null; _photos = [];
+    _selectedCat = null; _selectedSpecies = null; _photos = []; _tags = [];
   }
 
   return { render, destroy };

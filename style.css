@@ -432,6 +432,20 @@ p { line-height: 1.5; }
   align-items: flex-end;
 }
 
+.map-offline-btn {
+  background: white;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--green-primary);
+  min-height: 40px;
+}
+.map-offline-btn:active { opacity: 0.7; }
+
 .map-layer-btn {
   background: white;
   border: none;
@@ -997,6 +1011,52 @@ select {
   padding: 2px 4px;
   background: transparent;
 }
+
+/* === Tags chip input === */
+.tags-input-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 6px 10px;
+  background: var(--surface);
+  min-height: 42px;
+}
+.tags-chips { display: contents; }
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--green-primary);
+  color: white;
+  border-radius: 20px;
+  padding: 3px 10px 3px 10px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.tag-chip-remove {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.8);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+.tags-input-wrap input {
+  border: none;
+  outline: none;
+  flex: 1;
+  min-width: 120px;
+  font-size: 0.9rem;
+  background: transparent;
+  padding: 2px 0;
+}
+.species-unknown-item { border-top: 1px solid var(--border); margin-top: 4px; }
 
 /* === Photo thumbnails === */
 .photo-grid {

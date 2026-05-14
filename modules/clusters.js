@@ -80,8 +80,9 @@ const Clusters = (() => {
         stand.centroid = { lat: cLat, lng: cLng };
       }
 
-      stand.obsCount  = members.length;
-      stand.updatedAt = now();
+      stand.obsCount             = members.length;
+      stand.memberObservationIds = members.map(o => o.id);
+      stand.updatedAt            = now();
       await DB.put('stands', stand);
 
       UI.toastSuccess('Added to stand');
@@ -116,16 +117,21 @@ const Clusters = (() => {
       }
 
       const stand = {
-        id:                     standId,
+        id:                       standId,
         surveyId,
-        primaryGbifKey:         newObs.gbifKey,
-        primarySpeciesName:     newObs.commonName || newObs.scientificName || '',
+        primaryGbifKey:           newObs.gbifKey,
+        primarySpeciesName:       newObs.commonName || newObs.scientificName || '',
         primarySpeciesScientific: newObs.scientificName || '',
-        category:               newObs.category,
-        obsCount:               members.length,
+        category:                 newObs.category,
+        obsCount:                 members.length,
+        memberObservationIds:     members.map(o => o.id),
         polygon,
         areaM2,
         centroid,
+        standType:                   null,
+        dominantSpecies:             null,
+        canopyCoverEstimatePct:      null,
+        understoryNotes:             '',
         notes:     '',
         createdAt: now(),
         updatedAt: now(),

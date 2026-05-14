@@ -27,6 +27,7 @@ const MapScreen = (() => {
         </div>
 
         <div class="map-controls-tr">
+          <button class="map-offline-btn" id="map-offline-btn" title="Save map for offline use">⬇ Offline</button>
           <button class="map-layer-btn" id="map-layers-btn">⊞ Layers</button>
           <div class="map-layer-panel" id="map-layer-panel" style="display:none"></div>
         </div>
@@ -131,7 +132,7 @@ const MapScreen = (() => {
     if (!mapEl) return;
 
     let timer = null, startX = 0, startY = 0, hasMoved = false;
-    const THRESHOLD = 10, DELAY = 600;
+    const THRESHOLD = 10, DELAY = 500;
 
     function start(clientX, clientY) {
       hasMoved = false;
@@ -291,6 +292,8 @@ const MapScreen = (() => {
   function _bindEvents() {
     document.getElementById('map-back')?.addEventListener('click', () => Router.navigate('home'));
 
+    document.getElementById('map-offline-btn')?.addEventListener('click', _startOfflineCache);
+
     document.getElementById('map-layers-btn')?.addEventListener('click', e => {
       e.stopPropagation();
       _layerPanelOpen = !_layerPanelOpen;
@@ -344,6 +347,71 @@ const MapScreen = (() => {
 
   function _handleEditStand() {
     UI.toast('Stand editing coming soon', 'info');
+  }
+
+  // ── Offline tile cache ────────────────────────────────────────────────────
+
+  async function _startOfflineCache() {
+    if (!_map) return;
+    const bounds = _map.getBounds();
+    const minZ   = CONFIG.MAP.CACHE_MIN_ZOOM;
+    const maxZ   = CONFIG.MAP.CACHE_MAX_ZOOM;
+
+    const fakeBounds = {
+      getSouth: () => bounds.getSouth(),
+      getNorth: () => bounds.getNorth(),
+      getWest:  () => bounds.getWest(),
+      getEast:  () => bounds.getEast(),
+    };
+
+    const est = Tiles.estimateTileCount(fakeBounds, minZ, maxZ);
+    const survey = await DB.get('surveys', _surveyId).catch(() => null);
+    const defaultName = survey?.siteName || survey?.name || 'Survey Area';
+
+    const nameInput = document.createElement('div');
+    nameInput.innerHTML = `
+      <p style="margin-bottom:10px;font-size:.9rem;color:var(--text-secondary)">
+        Cache ~${est} tiles (z${minZ}–${maxZ}) for offline use.<br>
+        Estimated download: ~${Math.round(est * 15 / 1024)} MB
+      </p>
+      <div class="form-group">
+        <label>Region Name</label>
+        <input type="text" id="offline-region-name" value="${escapeHtml(defaultName)}" autocomplete="off">
+      </div>
+      <div id="offline-progress" style="display:none;margin-top:10px">
+        <div class="progress-bar-wrap"><div class="progress-bar-fill" id="offline-prog-bar" style="width:0%"></div></div>
+        <p class="text-small text-muted" id="offline-prog-text" style="margin-top:4px">Starting…</p>
+      </div>`;
+
+    const { close } = UI.modal('Save Map for Offline Use', nameInput, {
+      buttons: [
+        { label: 'Cancel', style: 'btn-secondary', action: () => {} },
+        { label: 'Download', style: 'btn-primary', close: false, action: async () => {
+          const name = document.getElementById('offline-region-name')?.value?.trim() || defaultName;
+          const prog = document.getElementById('offline-progress');
+          const bar  = document.getElementById('offline-prog-bar');
+          const txt  = document.getElementById('offline-prog-text');
+          const dlBtn = document.querySelector('.modal-footer .btn-primary');
+          if (dlBtn) dlBtn.disabled = true;
+          if (prog) prog.style.display = 'block';
+
+          try {
+            await Tiles.cacheRegion({ getBounds: () => fakeBounds }, _tileSource, name, ({ done, total, failed }) => {
+              const pct = Math.round(done / total * 100);
+              if (bar) bar.style.width = pct + '%';
+              if (txt) txt.textContent = `${done} / ${total} tiles (${failed} failed)`;
+            });
+            close();
+            UI.toastSuccess(`"${name}" cached — ${est} tiles saved`);
+          } catch (err) {
+            if (dlBtn) dlBtn.disabled = false;
+            UI.toastError('Cache failed: ' + err.message);
+          }
+        }},
+      ],
+    });
+
+    setTimeout(() => document.getElementById('offline-region-name')?.focus(), 80);
   }
 
   // ── Destroy ───────────────────────────────────────────────────────────────

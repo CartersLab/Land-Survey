@@ -48,6 +48,44 @@ const AppSettingsScreen = (() => {
           </div>
 
           <div class="settings-section">
+            <div class="settings-section-title">HTML Export Defaults</div>
+            <div class="settings-card">
+              <div class="settings-row">
+                <div class="settings-row-label">
+                  <h4>Obscure Location by Default</h4>
+                  <p>Jitter coordinates in exported HTML maps</p>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="as-obscure-loc" ${settings.htmlExport?.obscureLocation ? 'checked' : ''}>
+                  <span class="toggle-track"></span>
+                </label>
+              </div>
+              <div class="settings-row" id="as-obscure-level-row" style="${settings.htmlExport?.obscureLocation ? '' : 'display:none'}">
+                <div class="settings-row-label"><h4>Default Obscure Level</h4></div>
+                <select id="as-obscure-level">
+                  <option value="low"   ${(settings.htmlExport?.obscureLevel||'medium')==='low'   ?'selected':''}>Low (±100m)</option>
+                  <option value="medium"${(settings.htmlExport?.obscureLevel||'medium')==='medium'?'selected':''}>Medium (±500m)</option>
+                  <option value="high"  ${(settings.htmlExport?.obscureLevel||'medium')==='high'  ?'selected':''}>High (±2km)</option>
+                </select>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-label"><h4>Show Download Buttons</h4></div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="as-show-dl" ${settings.htmlExport?.showDownloadButtons !== false ? 'checked' : ''}>
+                  <span class="toggle-track"></span>
+                </label>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-label"><h4>Show Species Inventory</h4></div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="as-show-inv" ${settings.htmlExport?.showInventoryTable !== false ? 'checked' : ''}>
+                  <span class="toggle-track"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
             <div class="settings-section-title">About</div>
             <div class="settings-card">
               <div class="settings-row">
@@ -89,6 +127,11 @@ const AppSettingsScreen = (() => {
     document.getElementById('as-back')?.addEventListener('click', () => Router.navigate('home'));
     document.getElementById('as-save')?.addEventListener('click', _save);
 
+    document.getElementById('as-obscure-loc')?.addEventListener('change', e => {
+      const row = document.getElementById('as-obscure-level-row');
+      if (row) row.style.display = e.target.checked ? 'flex' : 'none';
+    });
+
     document.getElementById('as-clear-cache')?.addEventListener('click', async () => {
       const ok = await UI.confirm('Clear the species lookup cache?', 'Clear Cache', { confirmLabel: 'Clear', dangerous: false });
       if (!ok) return;
@@ -123,6 +166,12 @@ const AppSettingsScreen = (() => {
       county:            document.getElementById('as-county')?.value?.trim()    || '',
       township:          document.getElementById('as-township')?.value?.trim()  || '',
       defaultTileSource: document.getElementById('as-tiles')?.value             || 'osm',
+      htmlExport: {
+        obscureLocation:     document.getElementById('as-obscure-loc')?.checked ?? false,
+        obscureLevel:        document.getElementById('as-obscure-level')?.value  || 'medium',
+        showDownloadButtons: document.getElementById('as-show-dl')?.checked     ?? true,
+        showInventoryTable:  document.getElementById('as-show-inv')?.checked    ?? true,
+      },
     };
     await DB.putRaw('appSettings', 'defaults', settings);
     UI.toastSuccess('Settings saved');

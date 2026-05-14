@@ -65,14 +65,20 @@ const ExportScreen = (() => {
     el.innerHTML = `<div style="padding:24px;text-align:center"><div class="loading-spinner"></div></div>`;
 
     try {
+      let obsCount = 0;
+      if (!['summary', 'tiles'].includes(tab)) {
+        const obs = await DB.getAllByIndex('observations', 'surveyId', _surveyId);
+        obsCount = obs.length;
+      }
+
       switch (tab) {
         case 'summary':   el.innerHTML = await _tabSummary();   break;
-        case 'inat':      el.innerHTML = _tabExport('iNaturalist CSV', 'Upload your observations directly to iNaturalist.', 'inat-csv', () => InatExporter.generate(_surveyId));    break;
-        case 'dwc':       el.innerHTML = _tabExport('Darwin Core CSV', 'Standard biodiversity data format for GBIF and data aggregators.', 'dwc-csv', () => DwcExporter.generate(_surveyId));     break;
-        case 'mnfi':      el.innerHTML = _tabExport('MNFI Element Occurrence', 'Michigan Natural Features Inventory element occurrence data.', 'mnfi-csv', () => MnfiExporter.generate(_surveyId));    break;
-        case 'geojson':   el.innerHTML = _tabExport('GeoJSON', 'All observations and stands as a GeoJSON FeatureCollection. Open in QGIS, ArcGIS, or any GIS tool.', 'geo-json', () => GeojsonExporter.generate(_surveyId)); break;
-        case 'checklist': el.innerHTML = _tabExport('Species Checklist CSV', 'Alphabetical species list with occurrence counts.', 'checklist-csv', () => ChecklistExporter.generate(_surveyId)); break;
-        case 'report':    el.innerHTML = _tabReport(); break;
+        case 'inat':      el.innerHTML = _tabExport('iNaturalist CSV',       'Upload observations directly to iNaturalist.',                                   'inat-csv',      obsCount); break;
+        case 'dwc':       el.innerHTML = _tabExport('Darwin Core ZIP',       'Standard DwC-A archive for GBIF and data aggregators (4-file ZIP).',             'dwc-zip',       obsCount); break;
+        case 'mnfi':      el.innerHTML = _tabExport('MNFI Element Occurrence','Michigan Natural Features Inventory element occurrence data (ZIP with report).', 'mnfi-zip',      obsCount); break;
+        case 'geojson':   el.innerHTML = _tabExport('GeoJSON',               'All observations and stands as a GeoJSON FeatureCollection.',                    'geo-json',      obsCount); break;
+        case 'checklist': el.innerHTML = _tabExport('Species Checklist',     'Alphabetical species list with occurrence counts (ZIP: CSV + TXT).',             'checklist-zip', obsCount); break;
+        case 'report':    el.innerHTML = await _tabReport(obsCount); break;
         case 'tiles':     el.innerHTML = await _tabTiles(); break;
         default:          el.innerHTML = `<p style="padding:16px">Unknown tab</p>`;
       }
@@ -128,25 +134,89 @@ const ExportScreen = (() => {
       </div>` : ''}`;
   }
 
-  function _tabExport(title, desc, btnId, genFn) {
+  function _tabExport(title, desc, btnId, obsCount) {
     return `
       <div class="export-section">
         <div class="export-section-header">${title}</div>
         <div class="export-section-body">
-          <p class="text-small text-muted" style="margin-bottom:12px">${desc}</p>
+          <p class="text-small text-muted" style="margin-bottom:4px">${desc}</p>
+          <p class="text-small" style="margin-bottom:14px;color:var(--green-primary);font-weight:600">${obsCount} observation record${obsCount !== 1 ? 's' : ''}</p>
           <button class="btn btn-primary" id="${btnId}-btn">⬇ Download ${title}</button>
         </div>
       </div>`;
   }
 
-  function _tabReport() {
+  async function _tabReport(obsCount) {
+    const appSettings = await DB.getRaw('appSettings', 'defaults').catch(() => null) || {};
+    const S = appSettings.htmlExport || {};
+    const tileProviderOpts = Object.entries(CONFIG.TILE_PROVIDERS)
+      .map(([k, p]) => `<option value="${k}"${(S.baseLayer||'osm')===k?' selected':''}>${p.name}</option>`)
+      .join('');
+    const obscureLayerOpts = Object.entries(CONFIG.TILE_PROVIDERS)
+      .map(([k, p]) => `<option value="${k}"${(S.obscureBaseLayer||'stadia')===k?' selected':''}>${p.name}</option>`)
+      .join('');
+
     return `
       <div class="export-section">
-        <div class="export-section-header">HTML Field Report</div>
+        <div class="export-section-header">HTML Report Settings</div>
         <div class="export-section-body">
-          <p class="text-small text-muted" style="margin-bottom:12px">
-            A self-contained HTML file with all observations, photos, and a map snapshot. Opens offline in any browser.
-          </p>
+
+          <div class="settings-row" style="padding:8px 0;border-bottom:1px solid var(--border)">
+            <div class="settings-row-label">
+              <h4 style="margin:0;font-size:.9rem">Obscure Location</h4>
+              <p style="margin:2px 0 0;font-size:.78rem;color:var(--text-muted)">Jitter coordinates to protect privacy</p>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="rpt-obscure" ${S.obscureLocation ? 'checked' : ''}>
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+
+          <div id="rpt-obscure-rows" style="${S.obscureLocation ? '' : 'display:none'}">
+            <div class="settings-row" style="padding:8px 0;border-bottom:1px solid var(--border)">
+              <div class="settings-row-label"><h4 style="margin:0;font-size:.9rem">Obscure Level</h4></div>
+              <select id="rpt-obscure-level" style="font-size:.85rem">
+                <option value="low"   ${(S.obscureLevel||'medium')==='low'   ?'selected':''}>Low (±100m)</option>
+                <option value="medium"${(S.obscureLevel||'medium')==='medium'?'selected':''}>Medium (±500m)</option>
+                <option value="high"  ${(S.obscureLevel||'medium')==='high'  ?'selected':''}>High (±2km)</option>
+              </select>
+            </div>
+            <div class="settings-row" style="padding:8px 0;border-bottom:1px solid var(--border)">
+              <div class="settings-row-label"><h4 style="margin:0;font-size:.9rem">Obscure Base Layer</h4></div>
+              <select id="rpt-obscure-layer" style="font-size:.85rem">${obscureLayerOpts}</select>
+            </div>
+          </div>
+
+          <div class="settings-row" style="padding:8px 0;border-bottom:1px solid var(--border)">
+            <div class="settings-row-label"><h4 style="margin:0;font-size:.9rem">Base Map Layer</h4></div>
+            <select id="rpt-base-layer" style="font-size:.85rem">${tileProviderOpts}</select>
+          </div>
+
+          <div class="settings-row" style="padding:8px 0;border-bottom:1px solid var(--border)">
+            <div class="settings-row-label">
+              <h4 style="margin:0;font-size:.9rem">Show Download Buttons</h4>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="rpt-show-dl" ${S.showDownloadButtons !== false ? 'checked' : ''}>
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+
+          <div class="settings-row" style="padding:8px 0">
+            <div class="settings-row-label">
+              <h4 style="margin:0;font-size:.9rem">Show Species Inventory</h4>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="rpt-show-inv" ${S.showInventoryTable !== false ? 'checked' : ''}>
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+
+        </div>
+      </div>
+      <div class="export-section">
+        <div class="export-section-body">
+          <p class="text-small" style="margin-bottom:14px;color:var(--green-primary);font-weight:600">${obsCount} observation record${obsCount !== 1 ? 's' : ''}</p>
           <button class="btn btn-primary" id="report-btn">⬇ Generate HTML Report</button>
         </div>
       </div>`;
@@ -198,12 +268,36 @@ const ExportScreen = (() => {
   function _bindTabEvents(tab) {
     const bind = (id, fn) => document.getElementById(id)?.addEventListener('click', fn);
 
-    if (tab === 'inat')      bind('inat-csv-btn',      () => _doExport(() => InatExporter.generate(_surveyId),    'inat-observations.csv',  'text/csv'));
-    if (tab === 'dwc')       bind('dwc-csv-btn',       () => _doExport(() => DwcExporter.generate(_surveyId),     'darwin-core.csv',         'text/csv'));
-    if (tab === 'mnfi')      bind('mnfi-csv-btn',      () => _doExport(() => MnfiExporter.generate(_surveyId),    'mnfi-occurrences.csv',    'text/csv'));
-    if (tab === 'geojson')   bind('geo-json-btn',      () => _doExport(() => GeojsonExporter.generate(_surveyId), 'survey.geojson',          'application/geo+json'));
-    if (tab === 'checklist') bind('checklist-csv-btn', () => _doExport(() => ChecklistExporter.generate(_surveyId), 'species-checklist.csv', 'text/csv'));
-    if (tab === 'report')    bind('report-btn',        () => _doExport(() => HtmlExporter.generate(_surveyId),    'field-report.html',       'text/html'));
+    if (tab === 'inat')      bind('inat-csv-btn',      () => _doExport(() => InatExporter.generate(_surveyId),      'inat-observations.csv',      'text/csv'));
+    if (tab === 'dwc')       bind('dwc-zip-btn',       () => _doExport(() => DwcExporter.generate(_surveyId),       'darwin-core.zip',             'application/zip'));
+    if (tab === 'mnfi')      bind('mnfi-zip-btn',      () => _doExport(() => MnfiExporter.generate(_surveyId),      'mnfi.zip',                    'application/zip'));
+    if (tab === 'geojson')   bind('geo-json-btn',      () => _doExport(() => GeojsonExporter.generate(_surveyId),   'survey.geojson',              'application/geo+json'));
+    if (tab === 'checklist') bind('checklist-zip-btn', () => _doExport(() => ChecklistExporter.generate(_surveyId), 'species-checklist.zip',       'application/zip'));
+
+    if (tab === 'report') {
+      document.getElementById('rpt-obscure')?.addEventListener('change', e => {
+        const rows = document.getElementById('rpt-obscure-rows');
+        if (rows) rows.style.display = e.target.checked ? 'block' : 'none';
+      });
+      bind('report-btn', async () => {
+        const settings = {
+          obscureLocation:          document.getElementById('rpt-obscure')?.checked ?? false,
+          obscureLevel:             document.getElementById('rpt-obscure-level')?.value || 'medium',
+          baseLayer:                document.getElementById('rpt-base-layer')?.value   || 'osm',
+          obscureBaseLayer:         document.getElementById('rpt-obscure-layer')?.value || 'stadia',
+          showDownloadButtons:      document.getElementById('rpt-show-dl')?.checked ?? true,
+          showInventoryTable:       document.getElementById('rpt-show-inv')?.checked ?? true,
+          stripCoordinatesFromPopups: document.getElementById('rpt-obscure')?.checked ?? false,
+          jitterCoordinates:        true,
+          hideScaleBar:             false,
+          stripPhotos:              false,
+          showSummaryHeader:        true,
+          showSpeciesSidebar:       true,
+        };
+        await DB.putRaw('exportSettings', _surveyId, { htmlExport: settings }).catch(() => {});
+        _doExport(() => HtmlExporter.generate(_surveyId), 'field-report.html', 'text/html');
+      });
+    }
 
     if (tab === 'tiles') {
       bind('tile-cache-btn', _startTileCache);
@@ -224,7 +318,9 @@ const ExportScreen = (() => {
     UI.loading(true, 'Generating…');
     try {
       const content = await genFn();
-      const blob = new Blob([content], { type: mime + ';charset=utf-8' });
+      const blob = content instanceof Blob
+        ? content
+        : new Blob([content], { type: mime + ';charset=utf-8' });
       const name  = _survey ? `${slugify(_survey.name)}_${filename}` : filename;
       downloadFile(blob, name);
       UI.toastSuccess('File downloaded');
