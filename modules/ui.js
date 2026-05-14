@@ -316,6 +316,14 @@ const UI = (() => {
     ], 0);
   }
 
+  function mergeClusterToast(name1, name2, callbacks = {}) {
+    const msg = `"${escapeHtml(name1)}" and "${escapeHtml(name2)}" overlap — merge into one cluster?`;
+    return toast(msg, 'cluster', [
+      { label: 'Yes, Merge', action: callbacks.onYes  || (() => {}), style: 'btn-primary' },
+      { label: 'Skip',       action: callbacks.onSkip || (() => {}), style: 'btn-secondary' },
+    ], 0);
+  }
+
   // ── Offline banner ───────────────────────────────────────────────────────
 
   let _offlineBanner = null;
@@ -429,6 +437,7 @@ const UI = (() => {
     addToStandToast,
     scanClusterToast,
     expandClusterToast,
+    mergeClusterToast,
     offlineBanner,
     swUpdateToast,
     newSurveyModal,

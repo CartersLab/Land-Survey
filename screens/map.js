@@ -474,7 +474,63 @@ const MapScreen = (() => {
     if (!_scanHighlight) _scanHighlight = L.layerGroup().addTo(_map);
     _scanHighlight.clearLayers();
 
-    if (item.type === 'expand') {
+    if (item.type === 'merge') {
+      // ── Merge: two same-species clusters within range of each other ───────
+      const [s1, s2] = item.stands;
+      const name1 = s1.name || s1.primarySpeciesName || 'Cluster';
+      const name2 = s2.name || s2.primarySpeciesName || 'Cluster';
+
+      // Highlight both cluster polygons in contrasting colours
+      const addHighlight = (stand, fillColor, color) => {
+        if (stand.polygon?.length >= 3) {
+          L.polygon(stand.polygon.map(p => [p.lat, p.lng]), {
+            color, fillColor, fillOpacity: 0.45, weight: 3,
+          }).addTo(_scanHighlight);
+        } else if (stand.centroid) {
+          L.circleMarker([stand.centroid.lat, stand.centroid.lng], {
+            radius: 16, fillColor, color, weight: 3, fillOpacity: 0.6,
+          }).addTo(_scanHighlight);
+        }
+      };
+      addHighlight(s1, '#f39c12', '#e67e22');
+      addHighlight(s2, '#8e44ad', '#6c3483');
+
+      // Zoom to encompass both clusters
+      const allPts = [
+        ...(s1.polygon || []).map(p => [p.lat, p.lng]),
+        ...(s2.polygon || []).map(p => [p.lat, p.lng]),
+        ...(s1.centroid ? [[s1.centroid.lat, s1.centroid.lng]] : []),
+        ...(s2.centroid ? [[s2.centroid.lat, s2.centroid.lng]] : []),
+      ];
+      if (allPts.length >= 2)
+        _map.fitBounds(L.latLngBounds(allPts).pad(0.5), { animate: true, maxZoom: 18 });
+
+      _activeScanToast = UI.mergeClusterToast(name1, name2, {
+        onYes: async () => {
+          _activeScanToast = null;
+          _clearScanHighlight();
+          try {
+            await Clusters.mergeStands(_surveyId, s1.id, s2.id);
+            // Drop any remaining merge suggestions that involved the removed stand
+            _scanQueue = _scanQueue.filter((c, qi) =>
+              qi <= _scanIdx ||
+              c.type !== 'merge' ||
+              (c.stands[0].id !== s2.id && c.stands[1].id !== s2.id)
+            );
+          } catch { UI.toastError('Failed to merge clusters'); }
+          window._refreshMapMarkers?.();
+          _scanIdx++;
+          setTimeout(_processNextScan, 400);
+        },
+        onSkip: () => {
+          _activeScanToast = null;
+          _clearScanHighlight();
+          _scanIdx++;
+          _processNextScan();
+        },
+      });
+
+    } else if (item.type === 'expand') {
       // ── Expand: add one ungrouped obs to an existing cluster ──────────────
       const { observation: obs, stand } = item;
       const specName = obs.commonName || obs.scientificName || 'Species';
