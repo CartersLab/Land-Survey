@@ -50,13 +50,16 @@ const MapScreen = (() => {
       _initMap();
       _buildLayerPanel();
       _bindEvents();
-      _loadMarkers();
 
+      // Set before _loadMarkers so any async refreshStand calls fired from
+      // form.js right after Router.navigate can always find the callback.
       window._refreshMapMarkers = () => _loadMarkers();
       window._editObs       = _handleEditObs;
       window._deleteObs     = _handleDeleteObs;
       window._editCluster   = _handleEditCluster;
       window._deleteCluster = _handleDeleteCluster;
+
+      _loadMarkers();
     } catch (err) {
       console.error('[MapScreen] init failed:', err);
       container.innerHTML = `
@@ -791,8 +794,11 @@ const MapScreen = (() => {
     const standId = obs.standId;
     await DB.delete('observations', obsId);
     _map.closePopup();
-    if (standId) Clusters.refreshStand(_surveyId, standId).catch(() => {});
-    _loadMarkers();
+    if (standId) {
+      await Clusters.refreshStand(_surveyId, standId);
+    } else {
+      _loadMarkers();
+    }
     UI.toastSuccess('Observation deleted');
   }
 
